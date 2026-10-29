@@ -9,8 +9,10 @@ import os
 from pathlib import Path
 import secrets
 import sqlite3
+from zoneinfo import ZoneInfo
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qs
+import catalog
 
 ROOT = Path(__file__).resolve().parent
 DATA = Path(os.environ.get('PANTRY_DATA_DIR', ROOT / '.runtime'))
@@ -21,6 +23,7 @@ def supplier_key(value): return ' '.join(value.replace(' (чек)','').split()).
 def invoice_key(value): return ' '.join(value.split()).casefold()
 
 def now(): return dt.datetime.now(dt.timezone.utc).isoformat()
+def current_day(): return dt.datetime.now(ZoneInfo('Europe/Belgrade')).date().isoformat()
 def num(v, name='Число', minimum=0, nullable=False):
     if nullable and (v is None or v == ''): return None
     try: n=float(v)
@@ -55,6 +58,7 @@ def init():
         CREATE TABLE IF NOT EXISTS audit(id INTEGER PRIMARY KEY,at TEXT,action TEXT,kind TEXT,entity_id TEXT,before_json TEXT,after_json TEXT);
         CREATE TABLE IF NOT EXISTS orders(id INTEGER PRIMARY KEY, created_at TEXT NOT NULL, data TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY,value TEXT);
+        CREATE TABLE IF NOT EXISTS supplier_catalog(id INTEGER PRIMARY KEY,supplier TEXT NOT NULL,external_key TEXT NOT NULL,data TEXT NOT NULL,UNIQUE(supplier,external_key));
         ''')
         if not c.execute("SELECT 1 FROM meta WHERE key='seeded'").fetchone():
             seed=json.loads((ROOT/'data/seed.json').read_text())
@@ -67,6 +71,13 @@ def init():
             for a in seed['attendance']:
                 c.execute('INSERT INTO attendance VALUES(?,?,?,?)',(a['office'],a['date'],a['count'],a['notes']))
             c.execute("INSERT INTO meta VALUES('seeded','1')")
+        names=json.loads((ROOT/'data/serbian_names.json').read_text())
+        for r in c.execute('SELECT id,data FROM products').fetchall():
+            p=json.loads(r['data'])
+            if p['name'] in names and 'name_status' not in p:
+                old=p.copy();p['legacy_name']=p['name'];p['name']=names[p['name']];p['name_status']='provisional'
+                c.execute('UPDATE products SET data=? WHERE id=?',(json.dumps(p,ensure_ascii=False),r['id']))
+                log(c,'migrate','product',r['id'],old,p)
         for r in c.execute('SELECT id,data FROM deliveries').fetchall():
             d=json.loads(r['data'])
             c.execute('UPDATE deliveries SET supplier=?,number=? WHERE id=?',(supplier_key(d['supplier']),invoice_key(d['number']),r['id']))
@@ -114,6 +125,11 @@ def save_product(c,b,id=None):
     for k in ('name','supplier','category','unit'):
         if not isinstance(p[k],str) or not p[k].strip(): raise ValueError(f'Заполните поле {k}')
         p[k]=p[k].strip()[:250]
+    p['legacy_name']=(old or {}).get('legacy_name','')
+    p['catalog_id']=(old or {}).get('catalog_id')
+    p['name_status']=(old or {}).get('name_status','manual')
+    if old and p['name']!=old['name']:p['name_status']='manual'
+    p['supplier_sku']=str(b.get('supplier_sku',(old or {}).get('supplier_sku','')) or '').strip()[:150]
     p['office']=office(p['office'])
     if old and old['office']!=p['office']: raise ValueError('Для другого офиса создайте отдельную карточку')
     for k in ('image','url'):
@@ -136,7 +152,7 @@ def save_product(c,b,id=None):
 
 def save_observation(c,b):
     pid=int(b['product_id']); day(b['date'])
-    if b['date']>dt.date.today().isoformat(): raise ValueError('Остаток не может быть в будущем')
+    if b['date']>current_day(): raise ValueError('Остаток не может быть в будущем')
     if not c.execute('SELECT 1 FROM products WHERE id=?',(pid,)).fetchone(): raise ValueError('Товар не найден')
     kind=b.get('kind')
     if kind not in ('exact','estimate','level'): raise ValueError('Неизвестный тип остатка')
@@ -149,7 +165,7 @@ def save_observation(c,b):
 
 def save_delivery(c,b,id=None):
     o=office(b['office']); date=day(b['date'])
-    if date>dt.date.today().isoformat(): raise ValueError('Поступление не может быть в будущем')
+    if date>current_day(): raise ValueError('Поступление не может быть в будущем')
     supplier=str(b.get('supplier','')).strip(); number=str(b.get('number','')).strip()
     if not supplier or not number: raise ValueError('Укажите поставщика и номер документа')
     lines=[]
@@ -183,7 +199,7 @@ def save_delivery(c,b,id=None):
 
 class Handler(BaseHTTPRequestHandler):
     def send(self,code,data,ctype='application/json; charset=utf-8',headers=None):
-        raw=json.dumps(data,ensure_ascii=False).encode() if ctype.startswith('application/json') else data
+        raw=data if isinstance(data,bytes) else json.dumps(data,ensure_ascii=False).encode() if ctype.startswith('application/json') else data
         self.send_response(code)
         self.send_header('Content-Type',ctype); self.send_header('Content-Length',str(len(raw)))
         self.send_header('X-Content-Type-Options','nosniff'); self.send_header('X-Frame-Options','DENY')
@@ -204,9 +220,16 @@ class Handler(BaseHTTPRequestHandler):
         if not self.authenticated(): return
         path=urlparse(self.path).path
         with connect() as c:
+            if path=='/api/supplier-catalog':
+                q=parse_qs(urlparse(self.path).query);supplier=q.get('supplier',['Maxi'])[0];search=q.get('q',[''])[0].casefold()[:200]
+                try:page=max(1,int(q.get('page',['1'])[0]))
+                except ValueError:return self.send(400,{'error':'Invalid page'})
+                rows=[dict(json.loads(r['data']),id=r['id']) for r in c.execute('SELECT * FROM supplier_catalog WHERE supplier=? ORDER BY id',(supplier,))]
+                rows=[r for r in rows if search in (r['name']+' '+r['sku']).casefold()]
+                return self.send(200,dict(rows=rows[(page-1)*40:page*40],total=len(rows),page=page,suppliers=catalog.PAGES))
             if path=='/api/state': return self.send(200,state(c))
             if path=='/api/backup':
-                backup={t:[dict(r) for r in c.execute(f'SELECT * FROM {t}')] for t in ('products','observations','deliveries','attendance','audit','meta','orders')}
+                backup={t:[dict(r) for r in c.execute(f'SELECT * FROM {t}')] for t in ('products','observations','deliveries','attendance','audit','meta','orders','supplier_catalog')}
                 files={f.name:base64.b64encode(f.read_bytes()).decode() for f in (DATA/'files').glob('*.pdf')}
                 return self.send(200,dict(version=1,created_at=now(),tables=backup,files=files),headers={'Content-Disposition':'attachment; filename="pantry-backup.json"'})
             if path=='/api/audit': return self.send(200,[dict(r) for r in c.execute('SELECT * FROM audit ORDER BY id DESC LIMIT 300')])
@@ -222,7 +245,7 @@ class Handler(BaseHTTPRequestHandler):
         rel='index.html' if path=='/' else path.lstrip('/')
         f=(ROOT/'static'/rel).resolve()
         if not f.is_relative_to((ROOT/'static').resolve()) or not f.is_file(): return self.send(404,{'error':'Страница не найдена'})
-        types={'.html':'text/html; charset=utf-8','.css':'text/css','.js':'text/javascript','.svg':'image/svg+xml'}
+        types={'.html':'text/html; charset=utf-8','.css':'text/css','.js':'text/javascript','.svg':'image/svg+xml','.json':'application/json; charset=utf-8'}
         return self.send(200,f.read_bytes(),types.get(f.suffix,'application/octet-stream'))
     def do_POST(self):
         if not self.authenticated(): return
@@ -235,7 +258,28 @@ class Handler(BaseHTTPRequestHandler):
             if size<=0 or size>23_000_000: raise ValueError('Слишком большой или пустой запрос')
             b=json.loads(self.rfile.read(size)); path=urlparse(self.path).path; result={}
             with connect() as c:
-                if path=='/api/product': result={'id':save_product(c,b,b.get('id'))}
+                if path=='/api/catalog/preview':result=catalog.preview(b['content'],b['format'],b['supplier'])
+                elif path=='/api/catalog/import':
+                    ids=catalog.upsert(c,b['supplier'],b['rows'],now(),log);result={'count':len(ids)}
+                elif path=='/api/catalog/select':
+                    row=c.execute('SELECT data FROM supplier_catalog WHERE id=?',(int(b['catalog_id']),)).fetchone()
+                    if not row:raise ValueError('Catalogue product not found')
+                    item=json.loads(row['data']);o=office(b['office']);pid=b.get('product_id')
+                    for r in c.execute('SELECT id,data FROM products'):
+                        other=json.loads(r['data'])
+                        if other.get('office')==o and other.get('catalog_id')==int(b['catalog_id']) and r['id']!=pid:raise ValueError('This catalogue product is already linked in this office')
+                    if pid:
+                        row=c.execute('SELECT data FROM products WHERE id=?',(int(pid),)).fetchone()
+                        if not row:raise ValueError('Товар не найден')
+                        p=json.loads(row['data'])
+                        if p['office']!=o:raise ValueError('Товар не относится к офису')
+                        if supplier_key(p['supplier'])!=supplier_key(item['supplier']):raise ValueError('The existing product belongs to a different supplier')
+                    else:p=dict(office=o,category=item['category'],unit=item['unit'],step=1,rate=None,rate_source='Нет истории потребления',price=item['price'],active=True,notes='',thresholds=[0,1,3,6,12,24])
+                    p.update(name=item['name'],supplier=item['supplier'],supplier_sku=item['sku'],url=item['url'],image=item['image'] or p.get('image',''))
+                    id=save_product(c,p,int(pid) if pid else None)
+                    saved=json.loads(c.execute('SELECT data FROM products WHERE id=?',(id,)).fetchone()[0]);saved.update(catalog_id=int(b['catalog_id']),name_status='supplier_import')
+                    c.execute('UPDATE products SET data=? WHERE id=?',(json.dumps(saved,ensure_ascii=False),id));log(c,'link','product',id,None,{'catalog_id':int(b['catalog_id'])});result={'id':id}
+                elif path=='/api/product': result={'id':save_product(c,b,b.get('id'))}
                 elif path=='/api/observation': result={'id':save_observation(c,b)}
                 elif path=='/api/delivery': result={'id':save_delivery(c,b,b.get('id'))}
                 elif path=='/api/order':

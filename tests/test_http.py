@@ -22,6 +22,11 @@ class HTTPTest(unittest.TestCase):
         try:
             with urllib.request.urlopen(req) as r:return r.status,json.load(r)
         except urllib.error.HTTPError as e:return e.code,json.load(e)
+    def test_language_files_are_served_as_json(self):
+        for lang in ('ru','sr','en'):
+            code,data=self.request('/locales/'+lang+'.json')
+            self.assertEqual(code,200);self.assertIsInstance(data,dict)
+
     def test_mutations_persist_and_backup_has_history(self):
         code,d=self.request('/api/observation',dict(product_id=1,date='2026-10-22',kind='level',level=0))
         self.assertEqual(code,200)

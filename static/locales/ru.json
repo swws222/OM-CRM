@@ -1,0 +1,22 @@
+{
+  "Unknown supplier": "Неизвестный поставщик",
+  "Product name is missing or too long": "Название отсутствует или слишком длинное",
+  "A supplier SKU or product URL is required": "Укажите артикул поставщика или ссылку на товар",
+  "Product URL must belong to the selected supplier": "Ссылка должна вести на сайт выбранного поставщика",
+  "URL must be HTTPS without credentials": "Нужна HTTPS-ссылка без логина и пароля",
+  "Invalid unit price": "Неверная цена за единицу",
+  "Only RSD prices are supported": "Поддерживаются только цены в RSD",
+  "Import file is too large": "Файл для импорта слишком большой",
+  "Use CSV, JSON or saved HTML with Product JSON-LD": "Используйте CSV, JSON или сохранённый HTML с Product JSON-LD",
+  "No products found. Use a supplier CSV/JSON export or a page with Product JSON-LD.": "Товары не найдены. Нужна выгрузка CSV/JSON или страница с Product JSON-LD.",
+  "Import at most 5000 products at a time": "За один раз можно импортировать до 5000 товаров",
+  "Invalid product row": "Некорректная строка товара",
+  "Invalid product name": "Некорректное название товара",
+  "Select between 1 and 5000 products": "Выберите от 1 до 5000 товаров",
+  "Catalogue product not found": "Товар справочника не найден",
+  "This catalogue product is already linked in this office": "Этот товар справочника уже связан в данном офисе",
+  "The existing product belongs to a different supplier": "Выбранный товар относится к другому поставщику",
+  "Invalid page": "Некорректный номер страницы",
+  "kom": "шт.",
+  "kg": "кг"
+}

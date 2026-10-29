@@ -12,8 +12,8 @@ def restore(backup_path,target):
     if target.exists() and any(target.iterdir()): raise ValueError('Target must be an empty/new directory. Stop the server before switching data directories.')
     backup=json.loads(Path(backup_path).read_text())
     if backup.get('version')!=1: raise ValueError('Unsupported backup version')
-    tables=('products','observations','deliveries','attendance','audit','meta','orders')
-    if set(backup['tables'])!=set(tables): raise ValueError('Incomplete backup')
+    tables=('products','observations','deliveries','attendance','audit','meta','orders','supplier_catalog')
+    if set(backup['tables']) not in (set(tables),set(tables)-{'supplier_catalog'}): raise ValueError('Incomplete backup')
     files={}
     for name,encoded in backup.get('files',{}).items():
         raw=base64.b64decode(encoded,validate=True)
@@ -21,10 +21,10 @@ def restore(backup_path,target):
         files[name]=raw
     server.DATA=target;server.init()
     with server.connect() as c:
-        for table in ('observations','orders','audit','deliveries','attendance','products','meta'): c.execute(f'DELETE FROM {table}')
+        for table in ('supplier_catalog','observations','orders','audit','deliveries','attendance','products','meta'): c.execute(f'DELETE FROM {table}')
         for table in tables:
             columns=[r[1] for r in c.execute(f'PRAGMA table_info({table})')]
-            for row in backup['tables'][table]:
+            for row in backup['tables'].get(table,[]):
                 if set(row)!=set(columns): raise ValueError(f'Unexpected columns: {table}')
                 c.execute(f"INSERT INTO {table} ({','.join(columns)}) VALUES({','.join('?' for _ in columns)})",[row[col] for col in columns])
     (target/'files').mkdir(exist_ok=True)

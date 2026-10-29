@@ -10,6 +10,12 @@ class PantryTest(unittest.TestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory();self.previous=s.DATA;s.DATA=Path(self.tmp.name);s.init()
     def tearDown(self): s.DATA=self.previous;self.tmp.cleanup()
+    def test_business_date_uses_belgrade_at_midnight(self):
+        from unittest.mock import patch
+        with patch.object(s,'current_day',return_value='2026-10-30'),s.connect() as c:
+            s.save_observation(c,dict(product_id=1,date='2026-10-30',kind='level',level=0))
+            with self.assertRaises(ValueError):s.save_observation(c,dict(product_id=1,date='2026-10-31',kind='level',level=0))
+
     def test_seed_is_idempotent_and_preserves_approximate_source(self):
         s.init()
         with s.connect() as c:
