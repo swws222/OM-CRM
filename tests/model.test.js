@@ -1,0 +1,10 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {recommend} from '../static/model.js';
+const p={rate:.1,estimated_stock:5,step:12};
+test('rounds deficit upwards to a full pack',()=>assert.equal(recommend(p,240,.5).qty,36));
+test('never orders negative amounts',()=>assert.equal(recommend({...p,estimated_stock:100},240,.5).qty,0));
+test('unknown is not treated as zero',()=>{assert.equal(recommend({...p,rate:null},240,.5).qty,null);assert.equal(recommend({...p,estimated_stock:null},240,.5).qty,null)});
+test('zero visits and no deficit needs no order',()=>assert.equal(recommend(p,0,0).qty,0));
+test('decimal kilogram increments remain precise',()=>assert.equal(recommend({...p,rate:.03,step:.5,estimated_stock:0},100,0).qty,3));
+test('perishable target cap and pack overflow warning',()=>{const r=recommend({...p,max_stock:10,estimated_stock:0},240,.5);assert.equal(r.target,10);assert.equal(r.qty,12);assert.ok(r.warning)});

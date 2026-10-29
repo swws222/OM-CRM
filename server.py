@@ -1,0 +1,277 @@
+#!/usr/bin/env python3
+"""Office Pantry MVP: Python 3.11+, SQLite, no third-party runtime dependencies."""
+import base64
+import datetime as dt
+import hashlib
+import json
+import math
+import os
+from pathlib import Path
+import secrets
+import sqlite3
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import urlparse
+
+ROOT = Path(__file__).resolve().parent
+DATA = Path(os.environ.get('PANTRY_DATA_DIR', ROOT / '.runtime'))
+OFFICES = ['Белград', 'Нови-Сад']
+LEVELS = ['Нет', 'Очень мало', 'Мало', 'Средне', 'Много', 'Очень много']
+
+def supplier_key(value): return ' '.join(value.replace(' (чек)','').split()).casefold()
+def invoice_key(value): return ' '.join(value.split()).casefold()
+
+def now(): return dt.datetime.now(dt.timezone.utc).isoformat()
+def num(v, name='Число', minimum=0, nullable=False):
+    if nullable and (v is None or v == ''): return None
+    try: n=float(v)
+    except (TypeError,ValueError): raise ValueError(f'{name}: введите число')
+    if not math.isfinite(n) or n < minimum or n > 1e9: raise ValueError(f'{name}: недопустимое значение')
+    return n
+
+def day(v):
+    try: return dt.date.fromisoformat(v).isoformat()
+    except (ValueError,TypeError): raise ValueError('Дата должна быть в формате YYYY-MM-DD')
+def office(v):
+    if v not in OFFICES: raise ValueError('Неизвестный офис')
+    return v
+
+def connect():
+    DATA.mkdir(parents=True,exist_ok=True)
+    c=sqlite3.connect(DATA/'pantry.sqlite',timeout=20)
+    c.row_factory=sqlite3.Row
+    c.execute('PRAGMA foreign_keys=ON')
+    return c
+
+def log(c,action,kind,id,before=None,after=None):
+    c.execute('INSERT INTO audit(at,action,kind,entity_id,before_json,after_json) VALUES(?,?,?,?,?,?)',(now(),action,kind,str(id),json.dumps(before,ensure_ascii=False),json.dumps(after,ensure_ascii=False)))
+
+def init():
+    with connect() as c:
+        c.executescript('''
+        CREATE TABLE IF NOT EXISTS products(id INTEGER PRIMARY KEY, data TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS observations(id INTEGER PRIMARY KEY, product_id INTEGER NOT NULL REFERENCES products(id), date TEXT NOT NULL, kind TEXT NOT NULL, qty REAL, level INTEGER, note TEXT, created_at TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS deliveries(id INTEGER PRIMARY KEY, office TEXT NOT NULL,supplier TEXT NOT NULL,number TEXT NOT NULL,date TEXT NOT NULL,data TEXT NOT NULL, UNIQUE(office,supplier,number));
+        CREATE TABLE IF NOT EXISTS attendance(office TEXT NOT NULL,date TEXT NOT NULL,count INTEGER NOT NULL,notes TEXT,PRIMARY KEY(office,date));
+        CREATE TABLE IF NOT EXISTS audit(id INTEGER PRIMARY KEY,at TEXT,action TEXT,kind TEXT,entity_id TEXT,before_json TEXT,after_json TEXT);
+        CREATE TABLE IF NOT EXISTS orders(id INTEGER PRIMARY KEY, created_at TEXT NOT NULL, data TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY,value TEXT);
+        ''')
+        if not c.execute("SELECT 1 FROM meta WHERE key='seeded'").fetchone():
+            seed=json.loads((ROOT/'data/seed.json').read_text())
+            for p in seed['products']:
+                p={**p,'office':'Белград','active':True}
+                c.execute('INSERT INTO products(id,data) VALUES(?,?)',(p['id'],json.dumps(p,ensure_ascii=False)))
+                c.execute('INSERT INTO observations(product_id,date,kind,qty,note,created_at) VALUES(?,?,?,?,?,?)',(p['id'],seed['stock_date'],'estimate',p['stock'],p['source_note']+f" Диапазон: {p['stock_min']}–{p['stock_max']}.",now()))
+            for d in seed['deliveries']:
+                c.execute('INSERT INTO deliveries(office,supplier,number,date,data) VALUES(?,?,?,?,?)',(d['office'],supplier_key(d['supplier']),invoice_key(d['number']),d['date'],json.dumps(d,ensure_ascii=False)))
+            for a in seed['attendance']:
+                c.execute('INSERT INTO attendance VALUES(?,?,?,?)',(a['office'],a['date'],a['count'],a['notes']))
+            c.execute("INSERT INTO meta VALUES('seeded','1')")
+        for r in c.execute('SELECT id,data FROM deliveries').fetchall():
+            d=json.loads(r['data'])
+            c.execute('UPDATE deliveries SET supplier=?,number=? WHERE id=?',(supplier_key(d['supplier']),invoice_key(d['number']),r['id']))
+
+def state(c):
+    products=[dict(json.loads(r['data']),id=r['id']) for r in c.execute('SELECT * FROM products')]
+    observations=[dict(r) for r in c.execute('SELECT * FROM observations ORDER BY date,id')]
+    deliveries=[dict(json.loads(r['data']),id=r['id']) for r in c.execute('SELECT * FROM deliveries ORDER BY date DESC,id DESC')]
+    for p in products:
+        obs=[o for o in observations if o['product_id']==p['id']]
+        latest=obs[-1] if obs else None
+        qty=None
+        if latest:
+            qty=p['thresholds'][latest['level']] if latest['kind']=='level' else latest['qty']
+            qty+=sum(line['qty'] for d in deliveries if d['office']==p['office'] and latest['date']<d['date'] for line in d['lines'] if line['product_id']==p['id'])
+        p['observation']=latest; p['estimated_stock']=qty
+    return dict(products=products,observations=observations,deliveries=deliveries,attendance=[dict(r) for r in c.execute('SELECT * FROM attendance ORDER BY date DESC')],orders=[dict(json.loads(r['data']),id=r['id'],created_at=r['created_at']) for r in c.execute('SELECT * FROM orders ORDER BY id DESC')],offices=OFFICES,levels=LEVELS)
+
+def calibration(s,pid):
+    p=next(p for p in s['products'] if p['id']==pid)
+    anchors=[o for o in s['observations'] if o['product_id']==pid and o['kind']=='exact']
+    if len(anchors)<2: return dict(error='Нужны две точные инвентаризации в разные дни. Оценки по фото и кнопки не являются точными остатками.')
+    a,b=anchors[-2:]
+    if a['date']==b['date']: return dict(error='Инвентаризации должны быть в разные дни.')
+    attendance={a['date']:a['count'] for a in s['attendance'] if a['office']==p['office']}
+    dates=[]; current=dt.date.fromisoformat(a['date'])+dt.timedelta(days=1); end=dt.date.fromisoformat(b['date'])
+    while current<=end:
+        if current.weekday()<5: dates.append(current.isoformat())
+        current+=dt.timedelta(days=1)
+    missing=[d for d in dates if d not in attendance]
+    visits=sum(v for k,v in attendance.items() if a['date']<k<=b['date'])
+    received=sum(l['qty'] for d in s['deliveries'] if d['office']==p['office'] and a['date']<d['date']<=b['date'] for l in d['lines'] if l['product_id']==pid)
+    used=a['qty']+received-b['qty']
+    if missing: return dict(error=f'Не заполнена посещаемость за {len(missing)} будних дней',missing=missing)
+    if visits<=0 or used<0: return dict(error='Нельзя рассчитать норму: нет посещений или расход отрицательный. Проверьте поступления и остатки.')
+    return dict(rate=used/visits,used=used,received=received,visits=visits,start=a['date'],end=b['date'],note='Убыль включает списания. Все поставки периода должны быть внесены. Остатки фиксируются на конец дня.')
+
+def save_product(c,b,id=None):
+    old=None
+    if id:
+        r=c.execute('SELECT data FROM products WHERE id=?',(id,)).fetchone()
+        if not r: raise ValueError('Товар не найден')
+        old=json.loads(r[0])
+    p={k:b.get(k) for k in ['name','supplier','category','unit','office','image','url','notes','rate_source']}
+    for k in ('name','supplier','category','unit'):
+        if not isinstance(p[k],str) or not p[k].strip(): raise ValueError(f'Заполните поле {k}')
+        p[k]=p[k].strip()[:250]
+    p['office']=office(p['office'])
+    if old and old['office']!=p['office']: raise ValueError('Для другого офиса создайте отдельную карточку')
+    for k in ('image','url'):
+        p[k]=p[k] or ''
+        if p[k] and not p[k].startswith(('https://','/assets/','data:image/png;base64,','data:image/jpeg;base64,','data:image/webp;base64,')): raise ValueError('Фото/ссылка: используйте HTTPS или загрузите изображение PNG/JPEG/WebP')
+    p['rate']=num(b.get('rate'),'Норма',nullable=True); p['price']=num(b.get('price'),'Цена',nullable=True)
+    p['max_stock']=num(b.get('max_stock'),'Максимальный запас',nullable=True)
+    p['step']=num(b.get('step'),'Шаг',minimum=.001)
+    p['active']=bool(b.get('active',True))
+    t=b.get('thresholds',[])
+    if len(t)!=6: raise ValueError('Нужно шесть значений уровней')
+    p['thresholds']=[num(v,'Порог') for v in t]
+    if p['thresholds'][0]!=0 or p['thresholds']!=sorted(p['thresholds']): raise ValueError('Уровни должны возрастать, «Нет» = 0')
+    if old and p['rate']!=old.get('rate'):
+        p['rate_source']=b.get('rate_source') if str(b.get('rate_source','')).startswith('Точные остатки ') else 'Ручная норма администратора'
+    if id: c.execute('UPDATE products SET data=? WHERE id=?',(json.dumps(p,ensure_ascii=False),id))
+    else: id=c.execute('INSERT INTO products(data) VALUES(?)',(json.dumps(p,ensure_ascii=False),)).lastrowid
+    log(c,'update' if old else 'create','product',id,old,p)
+    return id
+
+def save_observation(c,b):
+    pid=int(b['product_id']); day(b['date'])
+    if b['date']>dt.date.today().isoformat(): raise ValueError('Остаток не может быть в будущем')
+    if not c.execute('SELECT 1 FROM products WHERE id=?',(pid,)).fetchone(): raise ValueError('Товар не найден')
+    kind=b.get('kind')
+    if kind not in ('exact','estimate','level'): raise ValueError('Неизвестный тип остатка')
+    qty=num(b.get('qty'),'Остаток') if kind!='level' else None
+    level=b.get('level') if kind=='level' else None
+    if kind=='level' and (type(level)!=int or level not in range(6)): raise ValueError('Неизвестный уровень')
+    id=c.execute('INSERT INTO observations(product_id,date,kind,qty,level,note,created_at) VALUES(?,?,?,?,?,?,?)',(pid,b['date'],kind,qty,level,str(b.get('note',''))[:2000],now())).lastrowid
+    log(c,'create','observation',id,None,b)
+    return id
+
+def save_delivery(c,b,id=None):
+    o=office(b['office']); date=day(b['date'])
+    if date>dt.date.today().isoformat(): raise ValueError('Поступление не может быть в будущем')
+    supplier=str(b.get('supplier','')).strip(); number=str(b.get('number','')).strip()
+    if not supplier or not number: raise ValueError('Укажите поставщика и номер документа')
+    lines=[]
+    for l in b.get('lines',[]):
+        pid=int(l['product_id']); row=c.execute('SELECT data FROM products WHERE id=?',(pid,)).fetchone()
+        if not row or json.loads(row[0])['office']!=o: raise ValueError('Позиция не относится к этому офису')
+        lines.append(dict(product_id=pid,qty=num(l['qty'],'Количество',minimum=.001),price=num(l.get('price'),'Цена',nullable=True)))
+    if not lines: raise ValueError('Добавьте хотя бы одну позицию')
+    attachment=b.get('attachment')
+    if attachment:
+        if len(attachment.get('base64',''))>20_000_000: raise ValueError('PDF слишком большой (до 15 МБ)')
+        try: raw=base64.b64decode(attachment['base64'],validate=True)
+        except Exception: raise ValueError('Некорректный файл')
+        if not raw.startswith(b'%PDF-'): raise ValueError('Нужен PDF-файл')
+        digest=hashlib.sha256(raw).hexdigest()
+        for r in c.execute('SELECT id,data FROM deliveries'):
+            if r['id']!=id and json.loads(r['data']).get('file_hash')==digest: raise ValueError('Этот PDF уже добавлен. Для объединённого документа отредактируйте существующую поставку.')
+        files=DATA/'files'; files.mkdir(exist_ok=True); (files/(digest+'.pdf')).write_bytes(raw)
+    oldrow=c.execute('SELECT data FROM deliveries WHERE id=?',(id,)).fetchone() if id else None
+    if id and not oldrow: raise ValueError('Поставка не найдена')
+    old=json.loads(oldrow[0]) if oldrow else None
+    d=dict(office=o,date=date,supplier=supplier,number=number,lines=lines,notes=str(b.get('notes',''))[:2000])
+    if attachment: d['file_hash']=digest
+    elif old and old.get('file_hash'): d['file_hash']=old['file_hash']
+    try:
+        if id: c.execute('UPDATE deliveries SET office=?,supplier=?,number=?,date=?,data=? WHERE id=?',(o,supplier_key(supplier),invoice_key(number),date,json.dumps(d,ensure_ascii=False),id))
+        else: id=c.execute('INSERT INTO deliveries(office,supplier,number,date,data) VALUES(?,?,?,?,?)',(o,supplier_key(supplier),invoice_key(number),date,json.dumps(d,ensure_ascii=False))).lastrowid
+    except sqlite3.IntegrityError: raise ValueError('Документ этого поставщика с таким номером уже есть в офисе')
+    log(c,'update' if old else 'create','delivery',id,old,d)
+    return id
+
+class Handler(BaseHTTPRequestHandler):
+    def send(self,code,data,ctype='application/json; charset=utf-8',headers=None):
+        raw=json.dumps(data,ensure_ascii=False).encode() if ctype.startswith('application/json') else data
+        self.send_response(code)
+        self.send_header('Content-Type',ctype); self.send_header('Content-Length',str(len(raw)))
+        self.send_header('X-Content-Type-Options','nosniff'); self.send_header('X-Frame-Options','DENY')
+        self.send_header('Cache-Control','no-store')
+        for k,v in (headers or {}).items(): self.send_header(k,v)
+        self.end_headers(); self.wfile.write(raw)
+    def authenticated(self):
+        token=os.environ.get('PANTRY_PASSWORD')
+        if not token: return True
+        try:
+            scheme,encoded=self.headers.get('Authorization','').split(' ',1)
+            user,password=base64.b64decode(encoded).decode().split(':',1)
+            if scheme=='Basic' and secrets.compare_digest(password,token): return True
+        except Exception: pass
+        self.send(401,{'error':'Требуется вход'},headers={'WWW-Authenticate':'Basic realm="Office Pantry", charset="UTF-8"'})
+        return False
+    def do_GET(self):
+        if not self.authenticated(): return
+        path=urlparse(self.path).path
+        with connect() as c:
+            if path=='/api/state': return self.send(200,state(c))
+            if path=='/api/backup':
+                backup={t:[dict(r) for r in c.execute(f'SELECT * FROM {t}')] for t in ('products','observations','deliveries','attendance','audit','meta','orders')}
+                files={f.name:base64.b64encode(f.read_bytes()).decode() for f in (DATA/'files').glob('*.pdf')}
+                return self.send(200,dict(version=1,created_at=now(),tables=backup,files=files),headers={'Content-Disposition':'attachment; filename="pantry-backup.json"'})
+            if path=='/api/audit': return self.send(200,[dict(r) for r in c.execute('SELECT * FROM audit ORDER BY id DESC LIMIT 300')])
+            if path.startswith('/api/calibrate/'):
+                try: return self.send(200,calibration(state(c),int(path.split('/')[-1])))
+                except (ValueError,StopIteration): return self.send(404,{'error':'Товар не найден'})
+            if path.startswith('/api/file/'):
+                digest=path.split('/')[-1]
+                if len(digest)!=64 or any(ch not in '0123456789abcdef' for ch in digest): return self.send(404,{'error':'Файл не найден'})
+                f=DATA/'files'/(digest+'.pdf')
+                if f.exists(): return self.send(200,f.read_bytes(),'application/pdf',{'Content-Disposition':'attachment; filename="invoice.pdf"'})
+                return self.send(404,{'error':'Файл не найден'})
+        rel='index.html' if path=='/' else path.lstrip('/')
+        f=(ROOT/'static'/rel).resolve()
+        if not f.is_relative_to((ROOT/'static').resolve()) or not f.is_file(): return self.send(404,{'error':'Страница не найдена'})
+        types={'.html':'text/html; charset=utf-8','.css':'text/css','.js':'text/javascript','.svg':'image/svg+xml'}
+        return self.send(200,f.read_bytes(),types.get(f.suffix,'application/octet-stream'))
+    def do_POST(self):
+        if not self.authenticated(): return
+        # Require same-origin JSON; cross-origin form requests cannot mutate data.
+        if self.headers.get('Sec-Fetch-Site')=='cross-site' or self.headers.get('Content-Type','').split(';')[0]!='application/json': return self.send(403,{'error':'Нужен same-origin JSON запрос'})
+        origin=self.headers.get('Origin')
+        if origin and urlparse(origin).netloc!=self.headers.get('Host'): return self.send(403,{'error':'Неверный Origin'})
+        try:
+            size=int(self.headers.get('Content-Length','0'))
+            if size<=0 or size>23_000_000: raise ValueError('Слишком большой или пустой запрос')
+            b=json.loads(self.rfile.read(size)); path=urlparse(self.path).path; result={}
+            with connect() as c:
+                if path=='/api/product': result={'id':save_product(c,b,b.get('id'))}
+                elif path=='/api/observation': result={'id':save_observation(c,b)}
+                elif path=='/api/delivery': result={'id':save_delivery(c,b,b.get('id'))}
+                elif path=='/api/order':
+                    office(b['office']); num(b['visits'],'Посещения'); num(b['buffer'],'Резерв')
+                    if not b.get('lines'): raise ValueError('Нет позиций для заказа')
+                    for line in b['lines']:
+                        num(line['qty'],'Количество',minimum=.001)
+                        row=c.execute('SELECT data FROM products WHERE id=?',(int(line['product_id']),)).fetchone()
+                        if not row or json.loads(row[0])['office']!=b['office']: raise ValueError('Товар не относится к офису')
+                    id=c.execute('INSERT INTO orders(created_at,data) VALUES(?,?)',(now(),json.dumps(b,ensure_ascii=False))).lastrowid
+                    log(c,'create','order',id,None,b); result={'id':id}
+                elif path=='/api/attendance':
+                    records=b.get('records',[b])
+                    if not records: raise ValueError('Нет строк')
+                    for a in records:
+                        o=office(a['office']); d=day(a['date']); n=num(a['count'],'Посещаемость')
+                        if n!=int(n): raise ValueError('Посещаемость должна быть целым числом')
+                        old=c.execute('SELECT * FROM attendance WHERE office=? AND date=?',(o,d)).fetchone()
+                        c.execute('INSERT OR REPLACE INTO attendance VALUES(?,?,?,?)',(o,d,int(n),a.get('notes','')))
+                        log(c,'upsert','attendance',o+':'+d,dict(old) if old else None,a)
+                elif path=='/api/delete':
+                    tables={'delivery':'deliveries','observation':'observations'}
+                    if b.get('kind') not in tables: raise ValueError('Этот тип записи нельзя удалить')
+                    table=tables[b['kind']]; row=c.execute(f'SELECT * FROM {table} WHERE id=?',(int(b['id']),)).fetchone()
+                    if not row: raise ValueError('Запись не найдена')
+                    c.execute(f'DELETE FROM {table} WHERE id=?',(int(b['id']),)); log(c,'delete',b['kind'],b['id'],dict(row))
+                else: return self.send(404,{'error':'Метод не найден'})
+            self.send(200,dict(ok=True,**result))
+        except (ValueError,KeyError,TypeError,sqlite3.IntegrityError) as e: self.send(400,{'error':str(e)})
+        except Exception:
+            import traceback
+            traceback.print_exc(); self.send(500,{'error':'Ошибка сервера. Проверьте журнал.'})
+
+if __name__=='__main__':
+    init()
+    host=os.environ.get('HOST','127.0.0.1'); port=int(os.environ.get('PORT','8000'))
+    if host not in ('127.0.0.1','localhost','::1') and not os.environ.get('PANTRY_PASSWORD'): raise SystemExit('Для доступа по сети задайте PANTRY_PASSWORD и используйте HTTPS через reverse proxy.')
+    print(f'Office Pantry: {host}:{port}; database: {DATA}',flush=True)
+    ThreadingHTTPServer((host,port),Handler).serve_forever()

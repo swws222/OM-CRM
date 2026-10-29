@@ -1,0 +1,2341 @@
+{
+  "source": "CRM_staff_prototype.xlsx",
+  "stock_date": "2026-10-19",
+  "products": [
+    {
+      "id": 1,
+      "name": "Argeta (паштет)",
+      "supplier": "Maxi",
+      "category": "Перекусы",
+      "unit": "шт.",
+      "step": 1.0,
+      "rate": 0.0284501061571125,
+      "rate_source": "Оценка из Excel · нижняя граница",
+      "price": null,
+      "image": "",
+      "url": "",
+      "thresholds": [
+        0,
+        1.71,
+        3.43,
+        6.85,
+        17.13,
+        27.41
+      ],
+      "notes": "Запас большой: заказ можно пропускать. Заказы только Maxi.",
+      "stock": 160.0,
+      "stock_min": 140.0,
+      "stock_max": 180.0,
+      "source_note": "Оценка по фото, 19.10.2026. Не точная инвентаризация."
+    },
+    {
+      "id": 2,
+      "name": "Хумус Ribella 200 г",
+      "supplier": "Maxi",
+      "category": "Перекусы",
+      "unit": "шт.",
+      "step": 1.0,
+      "rate": 0.0112526539278132,
+      "rate_source": "Оценка из Excel · нижняя граница",
+      "price": null,
+      "image": "",
+      "url": "",
+      "thresholds": [
+        0,
+        0.68,
+        1.36,
+        2.71,
+        6.78,
+        10.84
+      ],
+      "notes": "Заказ был один раз (03.08), расход оценён по остатку.",
+      "stock": 13.5,
+      "stock_min": 12.0,
+      "stock_max": 15.0,
+      "source_note": "Оценка по фото, 19.10.2026. Не точная инвентаризация."
+    },
+    {
+      "id": 3,
+      "name": "Лосось копчёный 200 г",
+      "supplier": "Maxi",
+      "category": "Перекусы",
+      "unit": "шт.",
+      "step": 1.0,
+      "rate": 0.0709129511677282,
+      "rate_source": "Оценка из Excel · нижняя граница",
+      "price": null,
+      "image": "",
+      "url": "",
+      "thresholds": [
+        0,
+        4.27,
+        8.54,
+        17.08,
+        42.7,
+        68.32
+      ],
+      "notes": "Заказ ~20 в неделю; на кухне 1 лосось не найден на фото.",
+      "stock": 20.0,
+      "stock_min": 18.0,
+      "stock_max": 22.0,
+      "source_note": "Оценка по фото, 19.10.2026. Не точная инвентаризация."
+    },
+    {
+      "id": 4,
+      "name": "Свиная шея нарезка 100 г",
+      "supplier": "Maxi",
+      "category": "Перекусы",
+      "unit": "шт.",
+      "step": 1.0,
+      "rate": 0.0619299087854057,
+      "rate_source": "Оценка из Excel · нижняя граница",
+      "price": null,
+      "image": "",
+      "url": "",
+      "thresholds": [
+        0,
+        3.73,
+        7.46,
+        14.92,
+        37.29,
+        59.67
+      ],
+      "notes": "На кухне 1 нарезка в боксах не разобрана — остаток занижен.",
+      "stock": 14.0,
+      "stock_min": 13.0,
+      "stock_max": 15.0,
+      "source_note": "Оценка по фото, 19.10.2026. Не точная инвентаризация."
+    },
+    {
+      "id": 5,
+      "name": "Grekos 150 г (все вкусы)",
+      "supplier": "Maxi",
+      "category": "Молочные",
+      "unit": "шт.",
+      "step": 12.0,
+      "rate": 0.108842010771993,
+      "rate_source": "Оценка из Excel · нижняя граница",
+      "price": null,
+      "image": "",
+      "url": "",
+      "thresholds": [
+        0,
+        6.55,
+        13.11,
+        26.22,
+        65.54,
+        104.87
+      ],
+      "notes": "",
+      "stock": 60.5,
+      "stock_min": 56.0,
+      "stock_max": 65.0,
+      "source_note": "Оценка по фото, 19.10.2026. Не точная инвентаризация."
+    },
+    {
+      "id": 6,
+      "name": "Jogood 330 г",
+      "supplier": "Maxi",
+      "category": "Молочные",
+      "unit": "шт.",
+      "step": 12.0,
+      "rate": 0.101436265709156,
+      "rate_source": "Оценка из Excel · нижняя граница",
+      "price": null,
+      "image": "",
+      "url": "",
+      "thresholds": [
+        0,
+        6.11,
+        12.22,
+        24.43,
+        61.08,
+        97.73
+      ],
+      "notes": "Сроки на крышках: 22.10, 29.10, 01.11 — выдать первыми.",
+      "stock": 38.0,
+      "stock_min": 35.0,
+      "stock_max": 41.0,
+      "source_note": "Оценка по фото, 19.10.2026. Не точная инвентаризация."
+    },
+    {
+      "id": 7,
+      "name": "Balans 330 г",
+      "supplier": "Maxi",
+      "category": "Молочные",
+      "unit": "шт.",
+      "step": 12.0,
+      "rate": 0.0590215439856373,
+      "rate_source": "Оценка из Excel · нижняя граница",
+      "price": null,
+      "image": "",
+      "url": "",
+      "thresholds": [
+        0,
+        3.55,
+        7.11,
+        14.22,
+        35.54,
+        56.87
+      ],
+      "notes": "",
+      "stock": 12.5,
+      "stock_min": 12.0,
+      "stock_max": 13.0,
+      "source_note": "Оценка по фото, 19.10.2026. Не точная инвентаризация."
+    },
+    {
+      "id": 8,
+      "name": "Zott Protein drink 250 мл",
+      "supplier": "Maxi",
+      "category": "Молочные",
+      "unit": "шт.",
+      "step": 12.0,
+      "rate": 0.0821364452423698,
+      "rate_source": "Оценка из Excel · нижняя граница",
+      "price": null,
+      "image": "",
+      "url": "",
+      "thresholds": [
+        0,
+        4.95,
+        9.89,
+        19.78,
+        49.46,
+        79.14
+      ],
+      "notes": "",
+      "stock": 29.0,
+      "stock_min": 26.0,
+      "stock_max": 32.0,
+      "source_note": "Оценка по фото, 19.10.2026. Не точная инвентаризация."
+    },
+    {
+      "id": 9,
+      "name": "Протеиновый пудинг (Zott/Imlek)",
+      "supplier": "Maxi",
+      "category": "Молочные",
+      "unit": "шт.",
+      "step": 12.0,
+      "rate": 0.0528084493518963,
+      "rate_source": "Оценка из Excel · нижняя граница",
+      "price": null,
+      "image": "",
+      "url": "",
+      "thresholds": [
+        0,
+        3.18,
+        6.36,
+        12.72,
+        31.8,
+        50.88
+      ],
+      "notes": "Один из самых быстрых по обороту.",
+      "stock": 26.0,
+      "stock_min": 25.0,
+      "stock_max": 27.0,
+      "source_note": "Оценка по фото, 19.10.2026. Не точная инвентаризация."
+    },
+    {
+      "id": 10,
+      "name": "Impact Protein шейк 300 мл",
+      "supplier": "Maxi",
+      "category": "Молочные",
+      "unit": "шт.",
+      "step": 12.0,
+      "rate": 0.0484739676840215,
+      "rate_source": "Оценка из Excel · нижняя граница",
+      "price": null,
+      "image": "",
+      "url": "",
+      "thresholds": [
+        0,
+        2.92,
+        5.84,
+        11.68,
+        29.19,
+        46.7
+      ],
+      "notes": "Большой остаток при небольшом расходе.",
+      "stock": 70.0,
+      "stock_min": 65.0,
+      "stock_max": 75.0,
+      "source_note": "Оценка по фото, 19.10.2026. Не точная инвентаризация."
+    },
+    {
+      "id": 11,
+      "name": "Смузи-пауч (Nutrino Lab, Boom Box)",
+      "supplier": "Maxi",
+      "category": "Снеки",
+      "unit": "шт.",
+      "step": 1.0,
+      "rate": 0.14978396543447,
+      "rate_source": "Оценка из Excel · нижняя граница",
+      "price": null,
+      "image": "",
+      "url": "",
+      "thresholds": [
+        0,
+        9.02,
+        18.04,
+        36.08,
+        90.2,
+        144.32
+      ],
+      "notes": "На складе пауч Nutrino и Boom Box вперемешку.",
+      "stock": 60.0,
+      "stock_min": 53.0,
+      "stock_max": 67.0,
+      "source_note": "Оценка по фото, 19.10.2026. Не точная инвентаризация."
+    },
+    {
+      "id": 12,
+      "name": "Kinder Pingui 30 г",
+      "supplier": "Maxi",
+      "category": "Молочные",
+      "unit": "шт.",
+      "step": 1.0,
+      "rate": 0.112738853503185,
+      "rate_source": "Оценка из Excel · нижняя граница",
+      "price": null,
+      "image": "",
+      "url": "",
+      "thresholds": [
+        0,
+        6.79,
+        13.58,
+        27.16,
+        67.89,
+        108.62
+      ],
+      "notes": "",
+      "stock": 7.5,
+      "stock_min": 7.0,
+      "stock_max": 8.0,
+      "source_note": "Оценка по фото, 19.10.2026. Не точная инвентаризация."
+    },
+    {
+      "id": 13,
+      "name": "Sirko намазной сыр",
+      "supplier": "Maxi",
+      "category": "Молочные",
+      "unit": "шт.",
+      "step": 1.0,
+      "rate": 0.0115044247787611,
+      "rate_source": "Оценка из Excel · нижняя граница",
+      "price": null,
+      "image": "",
+      "url": "",
+      "thresholds": [
+        0,
+        0.69,
+        1.39,
+        2.77,
+        6.93,
+        11.08
+      ],
+      "notes": "",
+      "stock": 4.5,
+      "stock_min": 4.0,
+      "stock_max": 5.0,
+      "source_note": "Оценка по фото, 19.10.2026. Не точная инвентаризация."
+    },
+    {
+      "id": 14,
+      "name": "Tilsit 150 г",
+      "supplier": "Maxi",
+      "category": "Молочные",
+      "unit": "шт.",
+      "step": 5.0,
+      "rate": 0.0138483965014577,
+      "rate_source": "Оценка из Excel · нижняя граница",
+      "price": null,
+      "image": "",
+      "url": "",
+      "thresholds": [
+        0,
+        0.83,
+        1.67,
+        3.34,
+        8.34,
+        13.34
+      ],
+      "notes": "Единственный заказ 28.09 (15 шт.), поэтому расход считается надёжнее: ≈3 в неделю.",
+      "stock": 5.5,
+      "stock_min": 5.0,
+      "stock_max": 6.0,
+      "source_note": "Оценка по фото, 19.10.2026. Не точная инвентаризация."
+    },
+    {
+      "id": 15,
+      "name": "Молоко 1 л (Granice)",
+      "supplier": "Maxi",
+      "category": "Молочные",
+      "unit": "шт.",
+      "step": 12.0,
+      "rate": 0.0567773788150808,
+      "rate_source": "Оценка из Excel · нижняя граница",
+      "price": null,
+      "image": "",
+      "url": "",
+      "thresholds": [
+        0,
+        3.42,
+        6.84,
+        13.68,
+        34.19,
+        54.71
+      ],
+      "notes": "Три кадра склада частично пересекаются — оценка склада широкая.",
+      "stock": 29.5,
+      "stock_min": 24.0,
+      "stock_max": 35.0,
+      "source_note": "Оценка по фото, 19.10.2026. Не точная инвентаризация."
+    },
+    {
+      "id": 16,
+      "name": "Сырки глазированные (Moja Pijaca)",
+      "supplier": "Moja Pijaca",
+      "category": "Молочные",
+      "unit": "шт.",
+      "step": 12.0,
+      "rate": 0.363694267515924,
+      "rate_source": "Оценка из Excel · нижняя граница",
+      "price": null,
+      "image": "",
+      "url": "",
+      "thresholds": [
+        0,
+        21.9,
+        43.8,
+        87.6,
+        219.01,
+        350.42
+      ],
+      "notes": "Заказы партиями по 84–264, последний 17.09.",
+      "stock": 67.5,
+      "stock_min": 63.0,
+      "stock_max": 72.0,
+      "source_note": "Оценка по фото, 19.10.2026. Не точная инвентаризация."
+    },
+    {
+      "id": 17,
+      "name": "Тунец Rio Mare, банка 80 г",
+      "supplier": "Maxi",
+      "category": "Перекусы",
+      "unit": "шт.",
+      "step": 4.0,
+      "rate": 0.00914454277286136,
+      "rate_source": "Оценка из Excel · нижняя граница",
+      "price": null,
+      "image": "",
+      "url": "",
+      "thresholds": [
+        0,
+        0.55,
+        1.1,
+        2.2,
+        5.51,
+        8.81
+      ],
+      "notes": "Один заказ 31.08 (60 банок): расход как нижняя оценка по одной точке.",
+      "stock": 44.5,
+      "stock_min": 40.0,
+      "stock_max": 49.0,
+      "source_note": "Оценка по фото, 19.10.2026. Не точная инвентаризация."
+    },
+    {
+      "id": 18,
+      "name": "Бананы, кг",
+      "supplier": "Moja Pijaca",
+      "category": "Фрукты и овощи",
+      "unit": "кг",
+      "step": 1.0,
+      "rate": 0.0649807586586036,
+      "rate_source": "Оценка из Excel · нижняя граница",
+      "price": 202.5,
+      "image": "",
+      "url": "",
+      "thresholds": [
+        0,
+        3.91,
+        7.83,
+        15.65,
+        39.13,
+        62.61
+      ],
+      "notes": "Свежее: остаток ≈ 0, расход ≈ заказ. Окно до 30.09: накладных Moja Pijaca за 05.10 и 12.10 в файле нет. Историческая цена Moja Pijaca за сентябрь 2026, после скидки с НДС. Проверьте актуальность.",
+      "stock": 0.0,
+      "stock_min": 0.0,
+      "stock_max": 0.0,
+      "source_note": "Оценка по фото, 19.10.2026. Не точная инвентаризация."
+    },
+    {
+      "id": 19,
+      "name": "Черри 250 г, шт.",
+      "supplier": "Moja Pijaca",
+      "category": "Фрукты и овощи",
+      "unit": "шт.",
+      "step": 1.0,
+      "rate": 0.141836173721825,
+      "rate_source": "Оценка из Excel · нижняя граница",
+      "price": 304.2,
+      "image": "",
+      "url": "",
+      "thresholds": [
+        0,
+        8.54,
+        17.08,
+        34.16,
+        85.41,
+        136.66
+      ],
+      "notes": "Свежее. Историческая цена Moja Pijaca за сентябрь 2026, после скидки с НДС. Проверьте актуальность.",
+      "stock": 0.0,
+      "stock_min": 0.0,
+      "stock_max": 0.0,
+      "source_note": "Оценка по фото, 19.10.2026. Не точная инвентаризация."
+    },
+    {
+      "id": 20,
+      "name": "Морковные палочки 80 г, шт.",
+      "supplier": "Moja Pijaca",
+      "category": "Фрукты и овощи",
+      "unit": "шт.",
+      "step": 1.0,
+      "rate": 0.131940626717977,
+      "rate_source": "Оценка из Excel · нижняя граница",
+      "price": 89.1,
+      "image": "",
+      "url": "",
+      "thresholds": [
+        0,
+        7.95,
+        15.89,
+        31.78,
+        79.45,
+        127.12
+      ],
+      "notes": "Свежее. Историческая цена Moja Pijaca за сентябрь 2026, после скидки с НДС. Проверьте актуальность.",
+      "stock": 0.0,
+      "stock_min": 0.0,
+      "stock_max": 0.0,
+      "source_note": "Оценка по фото, 19.10.2026. Не точная инвентаризация."
+    },
+    {
+      "id": 21,
+      "name": "Огурцы, кг",
+      "supplier": "Moja Pijaca",
+      "category": "Фрукты и овощи",
+      "unit": "кг",
+      "step": 1.0,
+      "rate": 0.0503408466190214,
+      "rate_source": "Оценка из Excel · нижняя граница",
+      "price": 256.5,
+      "image": "",
+      "url": "",
+      "thresholds": [
+        0,
+        3.03,
+        6.06,
+        12.13,
+        30.31,
+        48.5
+      ],
+      "notes": "Свежее. Историческая цена Moja Pijaca за сентябрь 2026, после скидки с НДС. Проверьте актуальность.",
+      "stock": 0.0,
+      "stock_min": 0.0,
+      "stock_max": 0.0,
+      "source_note": "Оценка по фото, 19.10.2026. Не точная инвентаризация."
+    },
+    {
+      "id": 22,
+      "name": "Rosa негазированная 0,5 л",
+      "supplier": "Coca-Cola",
+      "category": "Напитки",
+      "unit": "бут.",
+      "step": 24,
+      "rate": null,
+      "rate_source": "Нет истории потребления",
+      "price": null,
+      "image": "",
+      "url": "",
+      "thresholds": [
+        0,
+        1,
+        3,
+        6,
+        12,
+        24
+      ],
+      "notes": "Пачки по 24. Пороги уровней — стартовый шаблон, настройте под товар.",
+      "stock": 252.0,
+      "stock_min": 206.0,
+      "stock_max": 298.0,
+      "source_note": "Оценка по фото, 19.10.2026. Нет данных о расходе."
+    },
+    {
+      "id": 23,
+      "name": "Rosa Ca газированная и Romer Quelle 0,5 л",
+      "supplier": "Coca-Cola",
+      "category": "Напитки",
+      "unit": "бут.",
+      "step": 12,
+      "rate": null,
+      "rate_source": "Нет истории потребления",
+      "price": null,
+      "image": "",
+      "url": "",
+      "thresholds": [
+        0,
+        1,
+        3,
+        6,
+        12,
+        24
+      ],
+      "notes": "Пачки по 12. Пороги уровней — стартовый шаблон, настройте под товар.",
+      "stock": 219.5,
+      "stock_min": 141.0,
+      "stock_max": 298.0,
+      "source_note": "Оценка по фото, 19.10.2026. Нет данных о расходе."
+    },
+    {
+      "id": 24,
+      "name": "Coca-Cola / Fanta / Sprite 0,5 л",
+      "supplier": "Coca-Cola",
+      "category": "Напитки",
+      "unit": "бут.",
+      "step": 12,
+      "rate": null,
+      "rate_source": "Нет истории потребления",
+      "price": null,
+      "image": "",
+      "url": "",
+      "thresholds": [
+        0,
+        1,
+        3,
+        6,
+        12,
+        24
+      ],
+      "notes": "Пачки по 12; на пачках с наклейкой «8.11.» — срок. Пороги уровней — стартовый шаблон, настройте под товар.",
+      "stock": 403.0,
+      "stock_min": 270.0,
+      "stock_max": 536.0,
+      "source_note": "Оценка по фото, 19.10.2026. Нет данных о расходе."
+    },
+    {
+      "id": 25,
+      "name": "Powerade 0,5 л",
+      "supplier": "Coca-Cola",
+      "category": "Напитки",
+      "unit": "бут.",
+      "step": 12,
+      "rate": null,
+      "rate_source": "Нет истории потребления",
+      "price": null,
+      "image": "",
+      "url": "",
+      "thresholds": [
+        0,
+        1,
+        3,
+        6,
+        12,
+        24
+      ],
+      "notes": "Пачки по 12 (допущение). Пороги уровней — стартовый шаблон, настройте под товар.",
+      "stock": 150.0,
+      "stock_min": 95.0,
+      "stock_max": 205.0,
+      "source_note": "Оценка по фото, 19.10.2026. Нет данных о расходе."
+    },
+    {
+      "id": 26,
+      "name": "Next (0,4 л / 0,33 л / 0,2 л)",
+      "supplier": "Coca-Cola",
+      "category": "Напитки",
+      "unit": "шт.",
+      "step": 12,
+      "rate": null,
+      "rate_source": "Нет истории потребления",
+      "price": null,
+      "image": "",
+      "url": "",
+      "thresholds": [
+        0,
+        1,
+        3,
+        6,
+        12,
+        24
+      ],
+      "notes": "Размер пачек Next 0,4 л принят 12. Пороги уровней — стартовый шаблон, настройте под товар.",
+      "stock": 333.0,
+      "stock_min": 230.0,
+      "stock_max": 436.0,
+      "source_note": "Оценка по фото, 19.10.2026. Нет данных о расходе."
+    },
+    {
+      "id": 27,
+      "name": "Банки Coca-Cola 330 мл и Fuze Tea 250 мл",
+      "supplier": "Coca-Cola",
+      "category": "Напитки",
+      "unit": "банок",
+      "step": 24,
+      "rate": null,
+      "rate_source": "Нет истории потребления",
+      "price": null,
+      "image": "",
+      "url": "",
+      "thresholds": [
+        0,
+        1,
+        3,
+        6,
+        12,
+        24
+      ],
+      "notes": "Лотки по 24. Пороги уровней — стартовый шаблон, настройте под товар.",
+      "stock": 473.0,
+      "stock_min": 422.0,
+      "stock_max": 524.0,
+      "source_note": "Оценка по фото, 19.10.2026. Нет данных о расходе."
+    },
+    {
+      "id": 28,
+      "name": "Alpro 1 л (бариста, миндаль, кокос)",
+      "supplier": "Уточнить",
+      "category": "Молочные",
+      "unit": "шт.",
+      "step": 1,
+      "rate": null,
+      "rate_source": "Нет истории потребления",
+      "price": null,
+      "image": "",
+      "url": "",
+      "thresholds": [
+        0,
+        1,
+        3,
+        6,
+        12,
+        24
+      ],
+      "notes": "Миндальное с датой 07.12.26 — заказывать пока не нужно. Пороги уровней — стартовый шаблон, настройте под товар.",
+      "stock": 37.5,
+      "stock_min": 34.0,
+      "stock_max": 41.0,
+      "source_note": "Оценка по фото, 19.10.2026. Нет данных о расходе."
+    },
+    {
+      "id": 29,
+      "name": "Хумус Carnex (мини)",
+      "supplier": "Уточнить",
+      "category": "Перекусы",
+      "unit": "шт.",
+      "step": 1,
+      "rate": null,
+      "rate_source": "Нет истории потребления",
+      "price": null,
+      "image": "",
+      "url": "",
+      "thresholds": [
+        0,
+        1,
+        3,
+        6,
+        12,
+        24
+      ],
+      "notes": "Не заказывается в Maxi/Moja Pijaca. Пороги уровней — стартовый шаблон, настройте под товар.",
+      "stock": 30.0,
+      "stock_min": 27.0,
+      "stock_max": 33.0,
+      "source_note": "Оценка по фото, 19.10.2026. Нет данных о расходе."
+    },
+    {
+      "id": 30,
+      "name": "Масло порционное Moja Kravica 10 г",
+      "supplier": "Уточнить",
+      "category": "Молочные",
+      "unit": "шт.",
+      "step": 1,
+      "rate": null,
+      "rate_source": "Нет истории потребления",
+      "price": null,
+      "image": "",
+      "url": "",
+      "thresholds": [
+        0,
+        1,
+        3,
+        6,
+        12,
+        24
+      ],
+      "notes": " Пороги уровней — стартовый шаблон, настройте под товар.",
+      "stock": 28.0,
+      "stock_min": 24.0,
+      "stock_max": 32.0,
+      "source_note": "Оценка по фото, 19.10.2026. Нет данных о расходе."
+    },
+    {
+      "id": 31,
+      "name": "Sportness протеиновые батончики",
+      "supplier": "Уточнить",
+      "category": "Снеки",
+      "unit": "шт.",
+      "step": 1,
+      "rate": null,
+      "rate_source": "Нет истории потребления",
+      "price": null,
+      "image": "",
+      "url": "",
+      "thresholds": [
+        0,
+        1,
+        3,
+        6,
+        12,
+        24
+      ],
+      "notes": "Низкая уверенность; поставщик другой (похоже на dm). Пороги уровней — стартовый шаблон, настройте под товар.",
+      "stock": 200.0,
+      "stock_min": 150.0,
+      "stock_max": 250.0,
+      "source_note": "Оценка по фото, 19.10.2026. Нет данных о расходе."
+    },
+    {
+      "id": 32,
+      "name": "Чай Stassen (коробки)",
+      "supplier": "Уточнить",
+      "category": "Напитки",
+      "unit": "шт.",
+      "step": 1,
+      "rate": null,
+      "rate_source": "Нет истории потребления",
+      "price": null,
+      "image": "",
+      "url": "",
+      "thresholds": [
+        0,
+        1,
+        3,
+        6,
+        12,
+        24
+      ],
+      "notes": "Mango в синем ящике: срок 10/2026. Пороги уровней — стартовый шаблон, настройте под товар.",
+      "stock": 53.5,
+      "stock_min": 50.0,
+      "stock_max": 57.0,
+      "source_note": "Оценка по фото, 19.10.2026. Нет данных о расходе."
+    },
+    {
+      "id": 33,
+      "name": "Чипсы Chipsy / Benlian",
+      "supplier": "Уточнить",
+      "category": "Снеки",
+      "unit": "шт.",
+      "step": 1,
+      "rate": null,
+      "rate_source": "Нет истории потребления",
+      "price": null,
+      "image": "",
+      "url": "",
+      "thresholds": [
+        0,
+        1,
+        3,
+        6,
+        12,
+        24
+      ],
+      "notes": " Пороги уровней — стартовый шаблон, настройте под товар.",
+      "stock": 37.5,
+      "stock_min": 34.0,
+      "stock_max": 41.0,
+      "source_note": "Оценка по фото, 19.10.2026. Нет данных о расходе."
+    },
+    {
+      "id": 34,
+      "name": "Хлеб тостовый",
+      "supplier": "Уточнить",
+      "category": "Фрукты и овощи",
+      "unit": "шт.",
+      "step": 1,
+      "rate": null,
+      "rate_source": "Нет истории потребления",
+      "price": null,
+      "image": "",
+      "url": "",
+      "thresholds": [
+        0,
+        1,
+        3,
+        6,
+        12,
+        24
+      ],
+      "notes": "Свежее; не калибруем. Пороги уровней — стартовый шаблон, настройте под товар.",
+      "stock": 21.0,
+      "stock_min": 20.0,
+      "stock_max": 22.0,
+      "source_note": "Оценка по фото, 19.10.2026. Нет данных о расходе."
+    },
+    {
+      "id": 35,
+      "name": "Listerine 500 мл",
+      "supplier": "Уточнить",
+      "category": "Прочее",
+      "unit": "шт.",
+      "step": 1,
+      "rate": null,
+      "rate_source": "Нет истории потребления",
+      "price": null,
+      "image": "",
+      "url": "",
+      "thresholds": [
+        0,
+        1,
+        3,
+        6,
+        12,
+        24
+      ],
+      "notes": "На складе, остальное в санузлах. Пороги уровней — стартовый шаблон, настройте под товар.",
+      "stock": 4.5,
+      "stock_min": 4.0,
+      "stock_max": 5.0,
+      "source_note": "Оценка по фото, 19.10.2026. Нет данных о расходе."
+    }
+  ],
+  "deliveries": [
+    {
+      "date": "2026-08-03",
+      "supplier": "Maxi",
+      "number": "213-IP5-14466",
+      "office": "Белград",
+      "notes": "История из Excel",
+      "lines": [
+        {
+          "product_id": 1,
+          "qty": 70.0,
+          "price": null
+        },
+        {
+          "product_id": 2,
+          "qty": 40.0,
+          "price": null
+        },
+        {
+          "product_id": 3,
+          "qty": 14.0,
+          "price": null
+        },
+        {
+          "product_id": 12,
+          "qty": 24.0,
+          "price": null
+        }
+      ]
+    },
+    {
+      "date": "2026-09-14",
+      "supplier": "Maxi",
+      "number": "213-IP5-17482",
+      "office": "Белград",
+      "notes": "История из Excel",
+      "lines": [
+        {
+          "product_id": 1,
+          "qty": 90.0,
+          "price": null
+        },
+        {
+          "product_id": 3,
+          "qty": 16.0,
+          "price": null
+        },
+        {
+          "product_id": 4,
+          "qty": 18.0,
+          "price": null
+        },
+        {
+          "product_id": 5,
+          "qty": 71.0,
+          "price": null
+        },
+        {
+          "product_id": 7,
+          "qty": 12.0,
+          "price": null
+        },
+        {
+          "product_id": 10,
+          "qty": 24.0,
+          "price": null
+        },
+        {
+          "product_id": 11,
+          "qty": 65.0,
+          "price": null
+        },
+        {
+          "product_id": 13,
+          "qty": 10.0,
+          "price": null
+        },
+        {
+          "product_id": 15,
+          "qty": 24.0,
+          "price": null
+        }
+      ]
+    },
+    {
+      "date": "2026-10-19",
+      "supplier": "Maxi",
+      "number": "213-IP5-20029",
+      "office": "Белград",
+      "notes": "История из Excel",
+      "lines": [
+        {
+          "product_id": 1,
+          "qty": 67.0,
+          "price": null
+        },
+        {
+          "product_id": 3,
+          "qty": 7.0,
+          "price": null
+        },
+        {
+          "product_id": 4,
+          "qty": 5.0,
+          "price": null
+        },
+        {
+          "product_id": 5,
+          "qty": 40.0,
+          "price": null
+        },
+        {
+          "product_id": 12,
+          "qty": 10.0,
+          "price": null
+        }
+      ]
+    },
+    {
+      "date": "2026-08-10",
+      "supplier": "Maxi",
+      "number": "213-IP5-14967",
+      "office": "Белград",
+      "notes": "История из Excel",
+      "lines": [
+        {
+          "product_id": 3,
+          "qty": 20.0,
+          "price": null
+        },
+        {
+          "product_id": 5,
+          "qty": 24.0,
+          "price": null
+        },
+        {
+          "product_id": 6,
+          "qty": 60.0,
+          "price": null
+        },
+        {
+          "product_id": 7,
+          "qty": 24.0,
+          "price": null
+        },
+        {
+          "product_id": 8,
+          "qty": 44.0,
+          "price": null
+        },
+        {
+          "product_id": 10,
+          "qty": 24.0,
+          "price": null
+        },
+        {
+          "product_id": 15,
+          "qty": 24.0,
+          "price": null
+        }
+      ]
+    },
+    {
+      "date": "2026-08-17",
+      "supplier": "Maxi",
+      "number": "213-IP5-15424",
+      "office": "Белград",
+      "notes": "История из Excel",
+      "lines": [
+        {
+          "product_id": 3,
+          "qty": 20.0,
+          "price": null
+        },
+        {
+          "product_id": 4,
+          "qty": 20.0,
+          "price": null
+        },
+        {
+          "product_id": 5,
+          "qty": 48.0,
+          "price": null
+        },
+        {
+          "product_id": 6,
+          "qty": 60.0,
+          "price": null
+        },
+        {
+          "product_id": 7,
+          "qty": 12.0,
+          "price": null
+        },
+        {
+          "product_id": 8,
+          "qty": 24.0,
+          "price": null
+        },
+        {
+          "product_id": 9,
+          "qty": 22.0,
+          "price": null
+        }
+      ]
+    },
+    {
+      "date": "2026-08-24",
+      "supplier": "Maxi",
+      "number": "213-IP5-15907",
+      "office": "Белград",
+      "notes": "История из Excel",
+      "lines": [
+        {
+          "product_id": 3,
+          "qty": 10.0,
+          "price": null
+        },
+        {
+          "product_id": 7,
+          "qty": 24.0,
+          "price": null
+        }
+      ]
+    },
+    {
+      "date": "2026-09-07",
+      "supplier": "Maxi",
+      "number": "213-IP5-16957",
+      "office": "Белград",
+      "notes": "История из Excel",
+      "lines": [
+        {
+          "product_id": 3,
+          "qty": 24.0,
+          "price": null
+        },
+        {
+          "product_id": 4,
+          "qty": 20.0,
+          "price": null
+        },
+        {
+          "product_id": 6,
+          "qty": 48.0,
+          "price": null
+        },
+        {
+          "product_id": 7,
+          "qty": 12.0,
+          "price": null
+        },
+        {
+          "product_id": 10,
+          "qty": 24.0,
+          "price": null
+        },
+        {
+          "product_id": 12,
+          "qty": 38.0,
+          "price": null
+        },
+        {
+          "product_id": 15,
+          "qty": 24.0,
+          "price": null
+        }
+      ]
+    },
+    {
+      "date": "2026-09-21",
+      "supplier": "Maxi",
+      "number": "213-IP5-17998",
+      "office": "Белград",
+      "notes": "История из Excel",
+      "lines": [
+        {
+          "product_id": 3,
+          "qty": 20.0,
+          "price": null
+        },
+        {
+          "product_id": 4,
+          "qty": 20.0,
+          "price": null
+        },
+        {
+          "product_id": 6,
+          "qty": 48.0,
+          "price": null
+        },
+        {
+          "product_id": 7,
+          "qty": 12.0,
+          "price": null
+        },
+        {
+          "product_id": 8,
+          "qty": 48.0,
+          "price": null
+        },
+        {
+          "product_id": 15,
+          "qty": 24.0,
+          "price": null
+        }
+      ]
+    },
+    {
+      "date": "2026-09-28",
+      "supplier": "Maxi",
+      "number": "213-IP5-18520",
+      "office": "Белград",
+      "notes": "История из Excel",
+      "lines": [
+        {
+          "product_id": 3,
+          "qty": 20.0,
+          "price": null
+        },
+        {
+          "product_id": 4,
+          "qty": 20.0,
+          "price": null
+        },
+        {
+          "product_id": 7,
+          "qty": 24.0,
+          "price": null
+        },
+        {
+          "product_id": 10,
+          "qty": 34.0,
+          "price": null
+        },
+        {
+          "product_id": 12,
+          "qty": 51.0,
+          "price": null
+        },
+        {
+          "product_id": 14,
+          "qty": 15.0,
+          "price": null
+        },
+        {
+          "product_id": 15,
+          "qty": 24.0,
+          "price": null
+        }
+      ]
+    },
+    {
+      "date": "2026-10-05",
+      "supplier": "Maxi",
+      "number": "чек 21730PP",
+      "office": "Белград",
+      "notes": "История из Excel",
+      "lines": [
+        {
+          "product_id": 3,
+          "qty": 16.0,
+          "price": null
+        },
+        {
+          "product_id": 5,
+          "qty": 60.0,
+          "price": null
+        },
+        {
+          "product_id": 6,
+          "qty": 48.0,
+          "price": null
+        },
+        {
+          "product_id": 8,
+          "qty": 48.0,
+          "price": null
+        },
+        {
+          "product_id": 9,
+          "qty": 12.0,
+          "price": null
+        },
+        {
+          "product_id": 10,
+          "qty": 72.0,
+          "price": null
+        },
+        {
+          "product_id": 12,
+          "qty": 150.0,
+          "price": null
+        },
+        {
+          "product_id": 13,
+          "qty": 6.0,
+          "price": null
+        }
+      ]
+    },
+    {
+      "date": "2026-10-12",
+      "supplier": "Maxi",
+      "number": "213-IP5-19534",
+      "office": "Белград",
+      "notes": "История из Excel",
+      "lines": [
+        {
+          "product_id": 3,
+          "qty": 20.0,
+          "price": null
+        },
+        {
+          "product_id": 4,
+          "qty": 11.0,
+          "price": null
+        },
+        {
+          "product_id": 7,
+          "qty": 24.0,
+          "price": null
+        },
+        {
+          "product_id": 9,
+          "qty": 35.0,
+          "price": null
+        }
+      ]
+    },
+    {
+      "date": "2026-08-31",
+      "supplier": "Maxi",
+      "number": "213-IP5-16445",
+      "office": "Белград",
+      "notes": "История из Excel",
+      "lines": [
+        {
+          "product_id": 4,
+          "qty": 29.0,
+          "price": null
+        },
+        {
+          "product_id": 5,
+          "qty": 60.0,
+          "price": null
+        },
+        {
+          "product_id": 8,
+          "qty": 48.0,
+          "price": null
+        },
+        {
+          "product_id": 9,
+          "qty": 48.0,
+          "price": null
+        },
+        {
+          "product_id": 13,
+          "qty": 8.0,
+          "price": null
+        },
+        {
+          "product_id": 17,
+          "qty": 60.0,
+          "price": null
+        }
+      ]
+    },
+    {
+      "date": "2026-08-26",
+      "supplier": "Moja Pijaca",
+      "number": "IS-2026-4052",
+      "office": "Белград",
+      "notes": "История из Excel",
+      "lines": [
+        {
+          "product_id": 9,
+          "qty": 19.0,
+          "price": null
+        },
+        {
+          "product_id": 16,
+          "qty": 144.0,
+          "price": null
+        }
+      ]
+    },
+    {
+      "date": "2026-08-17",
+      "supplier": "Maxi",
+      "number": "213-IP5-15432",
+      "office": "Белград",
+      "notes": "История из Excel",
+      "lines": [
+        {
+          "product_id": 11,
+          "qty": 128.0,
+          "price": null
+        }
+      ]
+    },
+    {
+      "date": "2026-09-22",
+      "supplier": "Maxi",
+      "number": "213-IP5-18095",
+      "office": "Белград",
+      "notes": "История из Excel",
+      "lines": [
+        {
+          "product_id": 11,
+          "qty": 179.0,
+          "price": null
+        }
+      ]
+    },
+    {
+      "date": "2026-08-24",
+      "supplier": "Moja Pijaca",
+      "number": "IS-2026-3967",
+      "office": "Белград",
+      "notes": "История из Excel",
+      "lines": [
+        {
+          "product_id": 15,
+          "qty": 36.0,
+          "price": null
+        },
+        {
+          "product_id": 18,
+          "qty": 16.0,
+          "price": null
+        },
+        {
+          "product_id": 19,
+          "qty": 30.0,
+          "price": null
+        },
+        {
+          "product_id": 20,
+          "qty": 30.0,
+          "price": null
+        },
+        {
+          "product_id": 21,
+          "qty": 16.04,
+          "price": null
+        }
+      ]
+    },
+    {
+      "date": "2026-08-03",
+      "supplier": "Moja Pijaca",
+      "number": "IS-2026-3628",
+      "office": "Белград",
+      "notes": "История из Excel",
+      "lines": [
+        {
+          "product_id": 16,
+          "qty": 96.0,
+          "price": null
+        },
+        {
+          "product_id": 18,
+          "qty": 12.1,
+          "price": null
+        },
+        {
+          "product_id": 19,
+          "qty": 20.0,
+          "price": null
+        },
+        {
+          "product_id": 20,
+          "qty": 20.0,
+          "price": null
+        },
+        {
+          "product_id": 21,
+          "qty": 10.0,
+          "price": null
+        }
+      ]
+    },
+    {
+      "date": "2026-08-17",
+      "supplier": "Moja Pijaca",
+      "number": "IS-2026-3866",
+      "office": "Белград",
+      "notes": "История из Excel",
+      "lines": [
+        {
+          "product_id": 16,
+          "qty": 168.0,
+          "price": null
+        },
+        {
+          "product_id": 18,
+          "qty": 12.0,
+          "price": null
+        },
+        {
+          "product_id": 19,
+          "qty": 26.0,
+          "price": null
+        },
+        {
+          "product_id": 20,
+          "qty": 30.0,
+          "price": null
+        }
+      ]
+    },
+    {
+      "date": "2026-09-07",
+      "supplier": "Moja Pijaca",
+      "number": "IS-2026-4197",
+      "office": "Белград",
+      "notes": "История из Excel",
+      "lines": [
+        {
+          "product_id": 16,
+          "qty": 168.0,
+          "price": null
+        },
+        {
+          "product_id": 18,
+          "qty": 14.0,
+          "price": null
+        },
+        {
+          "product_id": 19,
+          "qty": 20.0,
+          "price": null
+        },
+        {
+          "product_id": 20,
+          "qty": 20.0,
+          "price": null
+        },
+        {
+          "product_id": 21,
+          "qty": 14.0,
+          "price": null
+        }
+      ]
+    },
+    {
+      "date": "2026-09-14",
+      "supplier": "Moja Pijaca",
+      "number": "IS-2026-4355",
+      "office": "Белград",
+      "notes": "История из Excel",
+      "lines": [
+        {
+          "product_id": 16,
+          "qty": 84.0,
+          "price": null
+        },
+        {
+          "product_id": 18,
+          "qty": 14.0,
+          "price": null
+        },
+        {
+          "product_id": 19,
+          "qty": 30.0,
+          "price": null
+        },
+        {
+          "product_id": 20,
+          "qty": 20.0,
+          "price": null
+        },
+        {
+          "product_id": 21,
+          "qty": 15.0,
+          "price": null
+        }
+      ]
+    },
+    {
+      "date": "2026-09-17",
+      "supplier": "Moja Pijaca",
+      "number": "IS-2026-4421",
+      "office": "Белград",
+      "notes": "История из Excel",
+      "lines": [
+        {
+          "product_id": 16,
+          "qty": 264.0,
+          "price": null
+        },
+        {
+          "product_id": 19,
+          "qty": 4.0,
+          "price": null
+        }
+      ]
+    },
+    {
+      "date": "2026-08-10",
+      "supplier": "Moja Pijaca",
+      "number": "IS-2026-3763",
+      "office": "Белград",
+      "notes": "История из Excel",
+      "lines": [
+        {
+          "product_id": 18,
+          "qty": 12.0,
+          "price": null
+        },
+        {
+          "product_id": 19,
+          "qty": 20.0,
+          "price": null
+        },
+        {
+          "product_id": 20,
+          "qty": 30.0,
+          "price": null
+        },
+        {
+          "product_id": 21,
+          "qty": 4.5,
+          "price": null
+        }
+      ]
+    },
+    {
+      "date": "2026-08-31",
+      "supplier": "Moja Pijaca",
+      "number": "IS-2026-4075",
+      "office": "Белград",
+      "notes": "История из Excel",
+      "lines": [
+        {
+          "product_id": 18,
+          "qty": 14.1,
+          "price": null
+        },
+        {
+          "product_id": 19,
+          "qty": 60.0,
+          "price": null
+        },
+        {
+          "product_id": 20,
+          "qty": 30.0,
+          "price": null
+        }
+      ]
+    },
+    {
+      "date": "2026-09-22",
+      "supplier": "Moja Pijaca",
+      "number": "IS-2026-4496",
+      "office": "Белград",
+      "notes": "История из Excel",
+      "lines": [
+        {
+          "product_id": 18,
+          "qty": 12.0,
+          "price": null
+        },
+        {
+          "product_id": 19,
+          "qty": 24.0,
+          "price": null
+        },
+        {
+          "product_id": 20,
+          "qty": 30.0,
+          "price": null
+        },
+        {
+          "product_id": 21,
+          "qty": 12.0,
+          "price": null
+        }
+      ]
+    },
+    {
+      "date": "2026-09-28",
+      "supplier": "Moja Pijaca",
+      "number": "IS-2026-4570",
+      "office": "Белград",
+      "notes": "История из Excel",
+      "lines": [
+        {
+          "product_id": 18,
+          "qty": 12.0,
+          "price": null
+        },
+        {
+          "product_id": 19,
+          "qty": 24.0,
+          "price": null
+        },
+        {
+          "product_id": 20,
+          "qty": 30.0,
+          "price": null
+        },
+        {
+          "product_id": 21,
+          "qty": 12.03,
+          "price": null
+        }
+      ]
+    },
+    {
+      "date": "2026-10-19",
+      "supplier": "Moja Pijaca",
+      "number": "IS-2026-4977",
+      "office": "Белград",
+      "notes": "История из Excel",
+      "lines": [
+        {
+          "product_id": 18,
+          "qty": 3.08,
+          "price": null
+        },
+        {
+          "product_id": 19,
+          "qty": 6.0,
+          "price": null
+        },
+        {
+          "product_id": 20,
+          "qty": 12.0,
+          "price": null
+        },
+        {
+          "product_id": 21,
+          "qty": 1.04,
+          "price": null
+        }
+      ]
+    },
+    {
+      "date": "2026-08-13",
+      "supplier": "Moja Pijaca",
+      "number": "IS-2026-3831",
+      "office": "Белград",
+      "notes": "История из Excel",
+      "lines": [
+        {
+          "product_id": 21,
+          "qty": 8.0,
+          "price": null
+        }
+      ]
+    },
+    {
+      "date": "2026-06-01",
+      "supplier": "Maxi (чек)",
+      "number": "чек 01.06",
+      "office": "Белград",
+      "notes": "История из Excel",
+      "lines": [
+        {
+          "product_id": 3,
+          "qty": 30.0,
+          "price": null
+        },
+        {
+          "product_id": 4,
+          "qty": 20.0,
+          "price": null
+        },
+        {
+          "product_id": 6,
+          "qty": 107.0,
+          "price": null
+        },
+        {
+          "product_id": 9,
+          "qty": 72.0,
+          "price": null
+        },
+        {
+          "product_id": 10,
+          "qty": 22.0,
+          "price": null
+        },
+        {
+          "product_id": 12,
+          "qty": 8.0,
+          "price": null
+        }
+      ]
+    },
+    {
+      "date": "2026-06-22",
+      "supplier": "Maxi (чек)",
+      "number": "чек 22.06",
+      "office": "Белград",
+      "notes": "История из Excel",
+      "lines": [
+        {
+          "product_id": 4,
+          "qty": 12.0,
+          "price": null
+        },
+        {
+          "product_id": 5,
+          "qty": 30.0,
+          "price": null
+        },
+        {
+          "product_id": 6,
+          "qty": 58.0,
+          "price": null
+        },
+        {
+          "product_id": 12,
+          "qty": 24.0,
+          "price": null
+        }
+      ]
+    },
+    {
+      "date": "2026-06-23",
+      "supplier": "Maxi (чек)",
+      "number": "чек 23.06",
+      "office": "Белград",
+      "notes": "История из Excel",
+      "lines": [
+        {
+          "product_id": 3,
+          "qty": 10.0,
+          "price": null
+        }
+      ]
+    },
+    {
+      "date": "2026-07-06",
+      "supplier": "Maxi (чек)",
+      "number": "чек 06.07",
+      "office": "Белград",
+      "notes": "История из Excel",
+      "lines": [
+        {
+          "product_id": 3,
+          "qty": 6.0,
+          "price": null
+        },
+        {
+          "product_id": 4,
+          "qty": 14.0,
+          "price": null
+        },
+        {
+          "product_id": 5,
+          "qty": 48.0,
+          "price": null
+        },
+        {
+          "product_id": 8,
+          "qty": 16.0,
+          "price": null
+        },
+        {
+          "product_id": 7,
+          "qty": 24.0,
+          "price": null
+        },
+        {
+          "product_id": 12,
+          "qty": 41.0,
+          "price": null
+        }
+      ]
+    },
+    {
+      "date": "2026-07-13",
+      "supplier": "Maxi (чек)",
+      "number": "чек 13.07",
+      "office": "Белград",
+      "notes": "История из Excel",
+      "lines": [
+        {
+          "product_id": 1,
+          "qty": 50.0,
+          "price": null
+        },
+        {
+          "product_id": 17,
+          "qty": 40.0,
+          "price": null
+        },
+        {
+          "product_id": 3,
+          "qty": 15.0,
+          "price": null
+        },
+        {
+          "product_id": 5,
+          "qty": 30.0,
+          "price": null
+        },
+        {
+          "product_id": 8,
+          "qty": 14.0,
+          "price": null
+        },
+        {
+          "product_id": 10,
+          "qty": 24.0,
+          "price": null
+        },
+        {
+          "product_id": 9,
+          "qty": 36.0,
+          "price": null
+        }
+      ]
+    },
+    {
+      "date": "2026-07-27",
+      "supplier": "Maxi (чек)",
+      "number": "чек 27.07",
+      "office": "Белград",
+      "notes": "История из Excel",
+      "lines": [
+        {
+          "product_id": 4,
+          "qty": 12.0,
+          "price": null
+        },
+        {
+          "product_id": 3,
+          "qty": 20.0,
+          "price": null
+        },
+        {
+          "product_id": 11,
+          "qty": 116.0,
+          "price": null
+        },
+        {
+          "product_id": 5,
+          "qty": 56.0,
+          "price": null
+        }
+      ]
+    },
+    {
+      "date": "2026-07-20",
+      "supplier": "Maxi (чек)",
+      "number": "чек 5712PP",
+      "office": "Белград",
+      "notes": "История из Excel",
+      "lines": [
+        {
+          "product_id": 3,
+          "qty": 14.0,
+          "price": null
+        },
+        {
+          "product_id": 6,
+          "qty": 60.0,
+          "price": null
+        },
+        {
+          "product_id": 9,
+          "qty": 71.0,
+          "price": null
+        },
+        {
+          "product_id": 7,
+          "qty": 24.0,
+          "price": null
+        }
+      ]
+    },
+    {
+      "date": "2026-07-29",
+      "supplier": "Maxi (чек)",
+      "number": "чек 7404PP",
+      "office": "Белград",
+      "notes": "История из Excel",
+      "lines": [
+        {
+          "product_id": 12,
+          "qty": 51.0,
+          "price": null
+        }
+      ]
+    }
+  ],
+  "attendance": [
+    {
+      "date": "2026-08-03",
+      "count": 29,
+      "office": "Белград",
+      "notes": ""
+    },
+    {
+      "date": "2026-08-04",
+      "count": 25,
+      "office": "Белград",
+      "notes": ""
+    },
+    {
+      "date": "2026-08-05",
+      "count": 28,
+      "office": "Белград",
+      "notes": ""
+    },
+    {
+      "date": "2026-08-06",
+      "count": 22,
+      "office": "Белград",
+      "notes": ""
+    },
+    {
+      "date": "2026-08-07",
+      "count": 23,
+      "office": "Белград",
+      "notes": ""
+    },
+    {
+      "date": "2026-08-10",
+      "count": 23,
+      "office": "Белград",
+      "notes": ""
+    },
+    {
+      "date": "2026-08-11",
+      "count": 26,
+      "office": "Белград",
+      "notes": ""
+    },
+    {
+      "date": "2026-08-12",
+      "count": 30,
+      "office": "Белград",
+      "notes": ""
+    },
+    {
+      "date": "2026-08-13",
+      "count": 33,
+      "office": "Белград",
+      "notes": ""
+    },
+    {
+      "date": "2026-08-14",
+      "count": 33,
+      "office": "Белград",
+      "notes": ""
+    },
+    {
+      "date": "2026-08-17",
+      "count": 31,
+      "office": "Белград",
+      "notes": ""
+    },
+    {
+      "date": "2026-08-18",
+      "count": 35,
+      "office": "Белград",
+      "notes": ""
+    },
+    {
+      "date": "2026-08-19",
+      "count": 31,
+      "office": "Белград",
+      "notes": ""
+    },
+    {
+      "date": "2026-08-20",
+      "count": 27,
+      "office": "Белград",
+      "notes": ""
+    },
+    {
+      "date": "2026-08-21",
+      "count": 32,
+      "office": "Белград",
+      "notes": ""
+    },
+    {
+      "date": "2026-08-24",
+      "count": 45,
+      "office": "Белград",
+      "notes": "командировка 17 чел"
+    },
+    {
+      "date": "2026-08-25",
+      "count": 49,
+      "office": "Белград",
+      "notes": ""
+    },
+    {
+      "date": "2026-08-26",
+      "count": 51,
+      "office": "Белград",
+      "notes": ""
+    },
+    {
+      "date": "2026-08-27",
+      "count": 44,
+      "office": "Белград",
+      "notes": ""
+    },
+    {
+      "date": "2026-08-28",
+      "count": 43,
+      "office": "Белград",
+      "notes": ""
+    },
+    {
+      "date": "2026-08-31",
+      "count": 51,
+      "office": "Белград",
+      "notes": ""
+    },
+    {
+      "date": "2026-09-01",
+      "count": 54,
+      "office": "Белград",
+      "notes": "командировка 24 чел"
+    },
+    {
+      "date": "2026-09-02",
+      "count": 50,
+      "office": "Белград",
+      "notes": ""
+    },
+    {
+      "date": "2026-09-03",
+      "count": 54,
+      "office": "Белград",
+      "notes": ""
+    },
+    {
+      "date": "2026-09-04",
+      "count": 47,
+      "office": "Белград",
+      "notes": ""
+    },
+    {
+      "date": "2026-09-07",
+      "count": 47,
+      "office": "Белград",
+      "notes": "командировка 19 чел"
+    },
+    {
+      "date": "2026-09-08",
+      "count": 46,
+      "office": "Белград",
+      "notes": ""
+    },
+    {
+      "date": "2026-09-09",
+      "count": 46,
+      "office": "Белград",
+      "notes": ""
+    },
+    {
+      "date": "2026-09-10",
+      "count": 44,
+      "office": "Белград",
+      "notes": ""
+    },
+    {
+      "date": "2026-09-11",
+      "count": 44,
+      "office": "Белград",
+      "notes": ""
+    },
+    {
+      "date": "2026-09-14",
+      "count": 53,
+      "office": "Белград",
+      "notes": "командировка 30 чел"
+    },
+    {
+      "date": "2026-09-15",
+      "count": 55,
+      "office": "Белград",
+      "notes": ""
+    },
+    {
+      "date": "2026-09-16",
+      "count": 53,
+      "office": "Белград",
+      "notes": ""
+    },
+    {
+      "date": "2026-09-17",
+      "count": 60,
+      "office": "Белград",
+      "notes": ""
+    },
+    {
+      "date": "2026-09-18",
+      "count": 64,
+      "office": "Белград",
+      "notes": ""
+    },
+    {
+      "date": "2026-09-21",
+      "count": 46,
+      "office": "Белград",
+      "notes": "командировка 11 чел"
+    },
+    {
+      "date": "2026-09-22",
+      "count": 45,
+      "office": "Белград",
+      "notes": ""
+    },
+    {
+      "date": "2026-09-23",
+      "count": 49,
+      "office": "Белград",
+      "notes": ""
+    },
+    {
+      "date": "2026-09-24",
+      "count": 51,
+      "office": "Белград",
+      "notes": ""
+    },
+    {
+      "date": "2026-09-25",
+      "count": 50,
+      "office": "Белград",
+      "notes": ""
+    },
+    {
+      "date": "2026-09-28",
+      "count": 49,
+      "office": "Белград",
+      "notes": "командировка"
+    },
+    {
+      "date": "2026-09-29",
+      "count": 51,
+      "office": "Белград",
+      "notes": ""
+    },
+    {
+      "date": "2026-09-30",
+      "count": 50,
+      "office": "Белград",
+      "notes": ""
+    },
+    {
+      "date": "2026-10-01",
+      "count": 46,
+      "office": "Белград",
+      "notes": "командировка 18 чел"
+    },
+    {
+      "date": "2026-10-02",
+      "count": 42,
+      "office": "Белград",
+      "notes": ""
+    },
+    {
+      "date": "2026-10-05",
+      "count": 61,
+      "office": "Белград",
+      "notes": "командировка 41 чел"
+    },
+    {
+      "date": "2026-10-06",
+      "count": 66,
+      "office": "Белград",
+      "notes": ""
+    },
+    {
+      "date": "2026-10-07",
+      "count": 61,
+      "office": "Белград",
+      "notes": ""
+    },
+    {
+      "date": "2026-10-08",
+      "count": 65,
+      "office": "Белград",
+      "notes": ""
+    },
+    {
+      "date": "2026-10-09",
+      "count": 62,
+      "office": "Белград",
+      "notes": ""
+    },
+    {
+      "date": "2026-10-12",
+      "count": 20,
+      "office": "Белград",
+      "notes": ""
+    },
+    {
+      "date": "2026-10-13",
+      "count": 23,
+      "office": "Белград",
+      "notes": ""
+    },
+    {
+      "date": "2026-10-14",
+      "count": 26,
+      "office": "Белград",
+      "notes": ""
+    },
+    {
+      "date": "2026-10-15",
+      "count": 29,
+      "office": "Белград",
+      "notes": ""
+    },
+    {
+      "date": "2026-10-16",
+      "count": 35,
+      "office": "Белград",
+      "notes": ""
+    }
+  ],
+  "unmatched": []
+}
