@@ -16,6 +16,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 import catalog
 import taxonomy
+import purchasing
 
 ROOT = Path(__file__).resolve().parent
 DATA = Path(os.environ.get('PANTRY_DATA_DIR', ROOT / '.runtime'))
@@ -63,6 +64,8 @@ def init():
         CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY,value TEXT);
         CREATE TABLE IF NOT EXISTS supplier_catalog(id INTEGER PRIMARY KEY,supplier TEXT NOT NULL,external_key TEXT NOT NULL,data TEXT NOT NULL,url TEXT NOT NULL DEFAULT '',name_search TEXT NOT NULL DEFAULT '',UNIQUE(supplier,external_key));
         CREATE TABLE IF NOT EXISTS catalog_import_jobs(id TEXT PRIMARY KEY,data TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS trial_proposals(id INTEGER PRIMARY KEY,product_id INTEGER NOT NULL REFERENCES products(id),office TEXT NOT NULL,status TEXT NOT NULL,note TEXT NOT NULL,created_at TEXT NOT NULL,decided_at TEXT,order_id INTEGER REFERENCES orders(id),decision_note TEXT);
+        CREATE UNIQUE INDEX IF NOT EXISTS one_pending_trial ON trial_proposals(product_id) WHERE status='pending';
         ''')
         columns={r[1] for r in c.execute('PRAGMA table_info(supplier_catalog)')}
         if not {'url','name_search'}.issubset(columns):
@@ -92,7 +95,8 @@ def init():
             p=json.loads(r['data']);old=p.copy()
             if p['name'] in names and 'name_status' not in p:
                 p['legacy_name']=p['name'];p['name']=names[p['name']];p['name_status']='provisional'
-            if 'in_pantry' not in p:p['in_pantry']=r['id'] in observed or r['id'] in received
+            if 'in_pantry' not in p:p['in_pantry']=not p.get('archived',False) and (r['id'] in observed or r['id'] in received)
+            purchasing.normalize(p)
             if 'favorite' not in p:p['favorite']=False
             p['supplier']=taxonomy.canonical_supplier(p['supplier'])
             if p.get('category_source')!='manual' and (p.get('catalog_id') or p.get('name_status') in ('supplier_import','provisional')):
@@ -115,8 +119,8 @@ def state(c):
         if latest:
             qty=p['thresholds'][latest['level']] if latest['kind']=='level' else latest['qty']
             qty+=sum(line['qty'] for d in deliveries if d['office']==p['office'] and latest['date']<d['date'] for line in d['lines'] if line['product_id']==p['id'])
-        p['observation']=latest; p['estimated_stock']=qty
-    return dict(products=products,observations=observations,deliveries=deliveries,attendance=[dict(r) for r in c.execute('SELECT * FROM attendance ORDER BY date DESC')],orders=[dict(json.loads(r['data']),id=r['id'],created_at=r['created_at']) for r in c.execute('SELECT * FROM orders ORDER BY id DESC')],offices=OFFICES,levels=LEVELS,categories=taxonomy.CATEGORIES,suppliers=taxonomy.SUPPLIERS)
+        p['observation']=latest; p['estimated_stock']=qty;p['photo_status']=photo_status(p.get('image',''))
+    return dict(products=products,observations=observations,deliveries=deliveries,attendance=[dict(r) for r in c.execute('SELECT * FROM attendance ORDER BY date DESC')],orders=[dict(json.loads(r['data']),id=r['id'],created_at=r['created_at']) for r in c.execute('SELECT * FROM orders ORDER BY id DESC')],offices=OFFICES,levels=LEVELS,categories=taxonomy.CATEGORIES,suppliers=taxonomy.SUPPLIERS,proposals=[dict(r) for r in c.execute('SELECT * FROM trial_proposals ORDER BY id DESC')])
 
 def calibration(s,pid):
     p=next(p for p in s['products'] if p['id']==pid)
@@ -150,6 +154,15 @@ def save_product(c,b,id=None):
     p['supplier']=taxonomy.canonical_supplier(p['supplier'])
     p['favorite']=bool((old or {}).get('favorite',b.get('favorite',False)))
     p['in_pantry']=bool(b.get('in_pantry',(old or {}).get('in_pantry',False)))
+    p['purchase_policy']=b.get('purchase_policy',(old or {}).get('purchase_policy','regular' if p['in_pantry'] else 'catalog'))
+    if p['purchase_policy'] not in purchasing.POLICIES:raise ValueError('Неизвестный статус закупки')
+    p['trial_received']=bool((old or {}).get('trial_received',False))
+    if old and p['purchase_policy']!=old.get('purchase_policy'):
+        p['in_pantry']=old.get('in_pantry',False)
+        purchasing.change_policy(p,p['purchase_policy'])
+    else:purchasing.normalize(p)
+    for key in ('policy_reason','policy_changed_at'):
+        if key in (old or {}):p[key]=old[key]
     source=b.get('category_source',(old or {}).get('category_source'))
     if old and p['category']!=old.get('category'):source='manual'
     p.update(taxonomy.category_fields(p['name'],p['category'],source))
@@ -169,6 +182,7 @@ def save_product(c,b,id=None):
     p['archived']=bool(b.get('archived',(old or {}).get('archived',False)))
     p['active']=bool(b.get('active',True)) and not p['archived']
     p['image']=store_image(p['image'])
+    if old and p['image']==old.get('image'):p['image_source']=old.get('image_source')
     t=b.get('thresholds',[])
     if len(t)!=6: raise ValueError('Нужно шесть значений уровней')
     p['thresholds']=[num(v,'Порог') for v in t]
@@ -234,19 +248,19 @@ def save_delivery(c,b,id=None):
 def enroll_received_product(c,pid):
     row=c.execute('SELECT data FROM products WHERE id=?',(pid,)).fetchone()
     if not row:return
-    p=json.loads(row[0])
-    if not p.get('in_pantry'):
-        p['in_pantry']=True;c.execute('UPDATE products SET data=? WHERE id=?',(json.dumps(p,ensure_ascii=False),pid))
-        log(c,'pantry','product',pid,None,{'in_pantry':True,'reason':'observation_or_delivery'})
+    p=json.loads(row[0]);before=p.copy();purchasing.receive(p)
+    if p!=before:
+        purchasing.save(c,pid,p);log(c,'received','product',pid,before,p)
 
 def product_flags(c,b):
-    pid=int(b['product_id']);row=c.execute('SELECT data FROM products WHERE id=?',(pid,)).fetchone()
-    if not row:raise ValueError('Товар не найден')
+    pid=int(b['product_id']);p=purchasing.product(c,pid)
     fields={k:b[k] for k in ('favorite','in_pantry') if k in b}
     if not fields or any(type(v)!=bool for v in fields.values()):raise ValueError('Флаги должны быть true или false')
-    p=json.loads(row[0]);before={k:bool(p.get(k)) for k in fields};p.update(fields)
-    c.execute('UPDATE products SET data=? WHERE id=?',(json.dumps(p,ensure_ascii=False),pid));log(c,'flags','product',pid,before,fields)
-    return {'product_id':pid,**fields}
+    before=p.copy()
+    if 'favorite' in fields:p['favorite']=fields['favorite']
+    if 'in_pantry' in fields:purchasing.change_policy(p,'regular' if fields['in_pantry'] else 'catalog')
+    purchasing.save(c,pid,p);log(c,'flags','product',pid,before,p)
+    return {'product_id':pid,**{k:p[k] for k in fields},'purchase_policy':p['purchase_policy'],'trial_received':p['trial_received']}
 
 def store_image(value):
     if not value or not value.startswith('data:'):return value
@@ -260,6 +274,44 @@ def store_image(value):
     name=hashlib.sha256(raw).hexdigest()+'.'+extension;folder=DATA/'catalog-images';folder.mkdir(exist_ok=True)
     if not (folder/name).exists():(folder/name).write_bytes(raw)
     return '/assets/catalog/'+name
+
+def photo_status(value):
+    if not value:return 'none'
+    if value.startswith('/assets/catalog/'):
+        name=value.rsplit('/',1)[-1]
+        return 'local' if re.fullmatch(r'[a-f0-9]{64}\.(png|jpg|webp)',name) and (DATA/'catalog-images'/name).is_file() else 'missing'
+    return 'inline' if value.startswith('data:') else 'external'
+
+def photo_candidates(c,pid,query='',page=1):
+    row=c.execute('SELECT data FROM products WHERE id=?',(pid,)).fetchone()
+    if not row:raise ValueError('Товар не найден')
+    target=json.loads(row['data']);supplier=taxonomy.canonical_supplier(target['supplier']);q=taxonomy.plain(query);choices=[];seen=set()
+    for kind,table in (('product','products'),('supplier_catalog','supplier_catalog')):
+        for r in c.execute(f'SELECT id,data FROM {table}'):
+            p=json.loads(r['data'])
+            if not p.get('image') or taxonomy.canonical_supplier(p['supplier'])!=supplier:continue
+            if kind=='product' and (r['id']==pid or p['office']!=target['office'] or p.get('archived')):continue
+            sku=p.get('supplier_sku',p.get('sku',''));key=(sku or p['name'],p['image'])
+            if key in seen:continue
+            if q and q not in taxonomy.plain(p['name']+' '+sku):continue
+            seen.add(key);choices.append(dict(source_type=kind,id=r['id'],name=p['name'],sku=sku,image=p['image'],photo_status=photo_status(p['image'])))
+    return dict(rows=choices[(page-1)*24:page*24],total=len(choices),page=page)
+
+def choose_product_photo(c,b):
+    pid=int(b['product_id']);kind=b.get('source_type');id=int(b['source_id'])
+    table={'product':'products','supplier_catalog':'supplier_catalog'}.get(kind)
+    if not table:raise ValueError('Неверный источник фотографии')
+    target=c.execute('SELECT data FROM products WHERE id=?',(pid,)).fetchone();source=c.execute(f'SELECT data FROM {table} WHERE id=?',(id,)).fetchone()
+    if not target or not source:raise ValueError('Товар не найден')
+    p=json.loads(target['data']);item=json.loads(source['data'])
+    if taxonomy.canonical_supplier(p['supplier'])!=taxonomy.canonical_supplier(item['supplier']):raise ValueError('Фотография относится к другому поставщику')
+    if kind=='product' and item['office']!=p['office']:raise ValueError('Товар не относится к офису')
+    if not item.get('image'):raise ValueError('У выбранного товара нет фото')
+    if photo_status(item['image'])=='missing':raise ValueError('Файл фотографии не найден. Скопируйте папку .runtime/catalog-images из прежней версии.')
+    before={'image':p.get('image',''),'image_source':p.get('image_source')};p['image']=store_image(item['image'])
+    p['image_source']=dict(type=kind,id=id,name=item['name'],sku=item.get('supplier_sku',item.get('sku','')),selected_at=now(),illustrative=p.get('name_status')=='provisional')
+    c.execute('UPDATE products SET data=? WHERE id=?',(json.dumps(p,ensure_ascii=False),pid));log(c,'photo','product',pid,before,{'image':p['image'],'image_source':p['image_source']})
+    return {'product_id':pid,'image':p['image']}
 
 def read_import_job(c,id):
     row=c.execute('SELECT data FROM catalog_import_jobs WHERE id=?',(str(id),)).fetchone()
@@ -291,6 +343,7 @@ def finish_catalog_import(c,b):
             item=json.loads(row['data']);old=linked.get(catalog_id)
             p=old.copy() if old else dict(office=job['office'],category=item['category'],unit=item['unit'],step=1,rate=None,rate_source='Нет истории потребления',price=item['price'],active=True,notes='',thresholds=[0,1,3,6,12,24],max_stock=None,legacy_name='',favorite=False,in_pantry=False,category_source=item.get('category_source','auto'))
             p.update(name=item['name'],supplier=item['supplier'],supplier_sku=item['sku'],url=item['url'],image=store_image(item.get('image') or p.get('image','')),catalog_id=catalog_id,name_status='supplier_import',archived=False,active=True)
+            purchasing.normalize(p)
             p.pop('id',None)
             if old:
                 id=old['id'];c.execute('UPDATE products SET data=? WHERE id=?',(json.dumps(p,ensure_ascii=False),id));result['updated']+=1
@@ -337,6 +390,10 @@ class Handler(BaseHTTPRequestHandler):
             mime={'.png':'image/png','.jpg':'image/jpeg','.webp':'image/webp'}[file.suffix]
             return self.send(200,file.read_bytes(),mime,{'Cache-Control':'private, max-age=31536000, immutable'})
         with connect() as c:
+            if path=='/api/photo-candidates':
+                query=parse_qs(urlparse(self.path).query)
+                try:return self.send(200,photo_candidates(c,int(query.get('product_id',['0'])[0]),query.get('q',[''])[0],max(1,int(query.get('page',['1'])[0]))))
+                except ValueError as e:return self.send(400,{'error':str(e)})
             if path=='/api/supplier-catalog':
                 q=parse_qs(urlparse(self.path).query);supplier=q.get('supplier',['Maxi'])[0];search=q.get('q',[''])[0].casefold()[:200]
                 try:page=max(1,int(q.get('page',['1'])[0]))
@@ -351,7 +408,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(200,dict(rows=rows,total=total,page=page,suppliers=catalog.PAGES))
             if path=='/api/state': return self.send(200,state(c))
             if path=='/api/backup':
-                backup={t:[dict(r) for r in c.execute(f'SELECT * FROM {t}')] for t in ('products','observations','deliveries','attendance','audit','meta','orders','supplier_catalog','catalog_import_jobs')}
+                backup={t:[dict(r) for r in c.execute(f'SELECT * FROM {t}')] for t in ('products','observations','deliveries','attendance','audit','meta','orders','supplier_catalog','catalog_import_jobs','trial_proposals')}
                 files={f.name:base64.b64encode(f.read_bytes()).decode() for f in (DATA/'files').glob('*.pdf')}
                 images={f.name:base64.b64encode(f.read_bytes()).decode() for f in (DATA/'catalog-images').glob('*') if f.is_file()}
                 return self.send(200,dict(version=1,created_at=now(),tables=backup,files=files,images=images),headers={'Content-Disposition':'attachment; filename="pantry-backup.json"'})
@@ -410,6 +467,10 @@ class Handler(BaseHTTPRequestHandler):
                     id=save_product(c,p,int(pid) if pid else None)
                     saved=json.loads(c.execute('SELECT data FROM products WHERE id=?',(id,)).fetchone()[0]);saved.update(catalog_id=int(b['catalog_id']),name_status='supplier_import')
                     c.execute('UPDATE products SET data=? WHERE id=?',(json.dumps(saved,ensure_ascii=False),id));log(c,'link','product',id,None,{'catalog_id':int(b['catalog_id'])});result={'id':id}
+                elif path=='/api/product-policy':result=purchasing.policy_action(c,b,now(),log)
+                elif path=='/api/proposals':result=purchasing.propose(c,b,now(),log)
+                elif path=='/api/proposals/decide':result=purchasing.decide(c,b,now(),log)
+                elif path=='/api/product-photo':result=choose_product_photo(c,b)
                 elif path=='/api/product-flags':result=product_flags(c,b)
                 elif path=='/api/product': result={'id':save_product(c,b,b.get('id'))}
                 elif path=='/api/observation': result={'id':save_observation(c,b)}

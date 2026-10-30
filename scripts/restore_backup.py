@@ -12,8 +12,8 @@ def restore(backup_path,target):
     if target.exists() and any(target.iterdir()): raise ValueError('Target must be an empty/new directory. Stop the server before switching data directories.')
     backup=json.loads(Path(backup_path).read_text())
     if backup.get('version')!=1: raise ValueError('Unsupported backup version')
-    tables=('products','observations','deliveries','attendance','audit','meta','orders','supplier_catalog','catalog_import_jobs')
-    if not (set(tables)-{'supplier_catalog','catalog_import_jobs'}).issubset(backup['tables']) or not set(backup['tables']).issubset(tables): raise ValueError('Incomplete backup')
+    tables=('products','observations','deliveries','attendance','audit','meta','orders','supplier_catalog','catalog_import_jobs','trial_proposals')
+    if not (set(tables)-{'supplier_catalog','catalog_import_jobs','trial_proposals'}).issubset(backup['tables']) or not set(backup['tables']).issubset(tables): raise ValueError('Incomplete backup')
     files={}
     for name,encoded in backup.get('files',{}).items():
         raw=base64.b64decode(encoded,validate=True)
@@ -27,7 +27,7 @@ def restore(backup_path,target):
         images[name]=raw
     server.DATA=target;server.init()
     with server.connect() as c:
-        for table in ('catalog_import_jobs','supplier_catalog','observations','orders','audit','deliveries','attendance','products','meta'): c.execute(f'DELETE FROM {table}')
+        for table in ('trial_proposals','catalog_import_jobs','supplier_catalog','observations','orders','audit','deliveries','attendance','products','meta'): c.execute(f'DELETE FROM {table}')
         for table in tables:
             columns=[r[1] for r in c.execute(f'PRAGMA table_info({table})')]
             for row in backup['tables'].get(table,[]):

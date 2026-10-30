@@ -30,10 +30,10 @@ try{
  const state=await (await page.request.get(base+'/api/state')).json();const current=state.products.filter(p=>!p.archived);assert.equal(current.length,725);assert.equal(state.products.filter(p=>p.archived).length,35);
  assert.deepEqual(state.observations,initial.observations);assert.deepEqual(state.deliveries,initial.deliveries);
  assert.ok(current.every(p=>p.image.startsWith('/assets/catalog/')));
- assert.equal(await page.locator('#content tbody tr').count(),725);
- await page.click('#show-archived');assert.equal(await page.locator('#content tbody tr').count(),35);await page.click('#show-archived');
+ assert.equal(await page.locator('#content .product').count(),725);
+ await page.click('#show-archived');assert.equal(await page.locator('#content .product').count(),35);await page.click('#show-archived');
  assert.ok(current.every(p=>!p.in_pantry));
- await page.locator('#content [data-pantry]').first().click();await page.waitForFunction(()=>document.querySelector('#content [data-pantry]')?.textContent.includes('Убрать'));
+ await page.locator('#content [data-pantry]').first().click();await page.locator('#modal-form').getByRole('button',{name:'Сохранить',exact:true}).click();await page.waitForSelector('dialog:not([open])',{state:'attached'});
  await page.click('[data-nav="stock"]');await page.waitForSelector('.product img');assert.equal(await page.locator('.product').count(),36);
  await page.locator('.product img').first().scrollIntoViewIfNeeded();await page.waitForFunction(()=>{const image=document.querySelector('.product img');return image?.complete&&image.naturalWidth>0});
  // Editing a product with a locally stored photo must not fail URL form validation.

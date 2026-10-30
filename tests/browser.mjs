@@ -17,17 +17,17 @@ try{
  await page.reload();await page.waitForSelector('.product .level.selected');assert.equal(await page.locator('.product .level.selected').first().textContent(),'Нет');
  await page.getByRole('button',{name:'План закупки',exact:false}).click();await page.waitForSelector('[data-qty="1"]');assert.ok(Number(await page.locator('[data-qty="1"]').inputValue())>0);
  await page.getByRole('button',{name:'Сохранить список',exact:true}).click();await page.waitForSelector('[data-saved-order]');
- await page.getByRole('button',{name:'Каталог',exact:false}).click();await page.getByRole('button',{name:'Добавить товар',exact:false}).click();
+ await page.getByRole('button',{name:'Все товары',exact:false}).click();await page.getByRole('button',{name:'Добавить товар',exact:false}).click();
  await page.locator('[name="name"]').fill('Test proizvod');await page.locator('[name="rate"]').fill('0.1');await page.locator('#modal-form').getByRole('button',{name:'Сохранить',exact:true}).click();await page.waitForSelector('dialog:not([open])',{state:'attached'});
  await page.getByRole('button',{name:'Поступления',exact:false}).click();await page.getByRole('button',{name:'Добавить поставку',exact:false}).click();await page.locator('[name="number"]').fill('browser-test-1');await page.locator('[data-key="qty"]').fill('24');await page.getByRole('checkbox',{name:'Проверил позиции.',exact:false}).check();await page.getByRole('button',{name:'Подтвердить поступление'}).click();await page.waitForSelector('dialog:not([open])',{state:'attached'});assert.ok((await page.locator('tbody').textContent()).includes('browser-test-1'));
  await page.getByRole('button',{name:'Посещаемость',exact:false}).click();await page.getByRole('button',{name:'Добавить день',exact:false}).click();await page.locator('[name="count"]').fill('42');await page.locator('#modal-form').getByRole('button',{name:'Сохранить',exact:true}).click();await page.waitForSelector('dialog:not([open])',{state:'attached'});
- await page.locator('#office').selectOption('Нови-Сад');await page.getByRole('button',{name:'Остатки',exact:false}).click();assert.equal(await page.locator('.product').count(),0);
+ await page.locator('#office').selectOption('Нови-Сад');await page.getByRole('button',{name:'Кладовая',exact:false}).click();assert.equal(await page.locator('.product').count(),0);
  await page.locator('#office').selectOption('Белград');await page.setViewportSize({width:390,height:844});await page.waitForSelector('.product');
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),true);await page.screenshot({path:'.runtime/screenshots/mobile.png',fullPage:false});
- await page.goto('http://127.0.0.1:8123/?mode=staff');await page.waitForSelector('.product');assert.equal(await page.locator('[data-nav]').count(),2);assert.equal(await page.locator('[data-edit]').count(),0);assert.equal(await page.locator('#inventory').count(),0);
+ await page.goto('http://127.0.0.1:8123/?mode=staff');await page.waitForSelector('.product');assert.equal(await page.locator('[data-nav]').count(),3);assert.equal(await page.locator('[data-edit]').count(),0);assert.equal(await page.locator('#inventory').count(),0);
 
  // Language choice persists, Serbian names do not change with UI language.
- for(const [lang,stockText] of [['sr','Zalihe'],['en','Stock'],['ru','Остатки']]){
+ for(const [lang,stockText] of [['sr','Ostava'],['en','Pantry'],['ru','Кладовая']]){
   await page.selectOption('#language',lang);await page.waitForFunction(l=>document.documentElement.lang===(l==='sr'?'sr-Latn':l),lang);await page.waitForSelector('.product');
   assert.equal(await page.locator('#language').inputValue(),lang);
   assert.ok((await page.locator('.nav').textContent()).includes(stockText));

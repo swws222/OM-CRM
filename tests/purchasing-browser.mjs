@@ -1,0 +1,37 @@
+import {waitForServer} from './browser-ready.mjs';
+import {chromium} from 'playwright';
+import {spawn} from 'node:child_process';
+import {mkdtemp,rm,mkdir} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import assert from 'node:assert/strict';
+const dir=await mkdtemp(tmpdir()+'/pantry-trial-');
+const proc=spawn('python3',['server.py'],{env:{...process.env,PANTRY_DATA_DIR:dir,PORT:'8127'},stdio:'pipe'});
+let browser;
+try{
+ const base='http://127.0.0.1:8127';await waitForServer(base+'/api/state');
+ browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox']});
+ const page=await browser.newPage({viewport:{width:1440,height:1000}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
+ const initial=await(await page.request.get(base+'/api/state')).json();
+ const {id,...template}=initial.products[0];
+ const response=await page.request.post(base+'/api/product',{data:{...template,name:'Marmelada test 200g',purchase_policy:'catalog',in_pantry:false}});assert.ok(response.ok());const pid=(await response.json()).id;
+ await page.goto(base+'/?mode=staff');await page.waitForSelector('.product');await page.click('[data-nav="products"]');
+ assert.equal(await page.locator('[data-level]').count(),0);assert.equal(await page.locator('[data-policy],[data-pantry]').count(),0);
+ await page.click(`[data-propose="${pid}"]`);await page.fill('[name="note"]','Попробуем к чаю');await page.locator('#modal-form').getByRole('button',{name:'Предложить на пробу',exact:true}).click();await page.waitForSelector('dialog:not([open])',{state:'attached'});assert.ok(await page.locator(`[data-propose="${pid}"]`).isDisabled());
+ await page.goto(base);await page.click('[data-nav="order"]');await page.waitForSelector('[data-decide]');await page.locator('[data-decide]').click();await page.fill('[name="qty"]','3');await page.locator('#modal-form').getByRole('button',{name:'Сохранить',exact:true}).click();await page.waitForSelector('dialog:not([open])',{state:'attached'});assert.equal(await page.locator('[data-decide]').count(),0);assert.equal(await page.locator(`[data-qty="${pid}"]`).count(),0);
+ await page.click('[data-nav="stock"]');await page.click('[data-assortment="trial"]');assert.equal(await page.locator('.product').count(),0);
+ const receipt=await page.request.post(base+'/api/delivery',{data:{office:'Белград',supplier:'Maxi',number:'TRIAL-BROWSER',date:'2026-10-29',lines:[{product_id:pid,qty:3,price:100}]}});assert.ok(receipt.ok());
+ await page.reload();await page.click('[data-assortment="trial"]');await page.waitForSelector(`[data-level="${pid}:0"]`);assert.equal(await page.locator('.product').count(),1);
+ await page.click(`[data-level="${pid}:0"]`);await page.waitForSelector(`[data-level="${pid}:0"].selected`);assert.equal(await page.locator('.product').count(),1);
+ await page.click(`[data-pantry="${pid}"]`);await page.locator('#modal-form').getByRole('button',{name:'Сохранить',exact:true}).click();await page.waitForSelector('dialog:not([open])',{state:'attached'});await page.click('[data-assortment="regular"]');assert.equal(await page.locator('.product').count(),36);
+ await page.click('[data-nav="order"]');assert.equal(await page.locator(`[data-qty="${pid}"]`).count(),1);
+ await page.click('[data-nav="stock"]');await page.locator(`[data-product="${pid}"][data-policy="trial"]`).click();await page.fill('[name="reason"]','Качество изменилось');await page.locator('#modal-form').getByRole('button',{name:'Сохранить',exact:true}).click();await page.waitForSelector('dialog:not([open])',{state:'attached'});
+ await page.click('[data-assortment="trial"]');assert.equal(await page.locator('.product').count(),1);assert.ok((await page.locator('.product').innerText()).includes('Качество изменилось'));await page.waitForSelector(`[data-level="${pid}:0"].selected`);
+ await page.click('[data-nav="order"]');assert.equal(await page.locator(`[data-qty="${pid}"]`).count(),0);
+ await page.click('[data-nav="stock"]');await page.click('[data-assortment="trial"]');
+ await mkdir('.runtime/screenshots',{recursive:true});await page.screenshot({path:'.runtime/screenshots/pantry-trial.png'});
+ await page.locator(`[data-product="${pid}"][data-policy="catalog"]`).click();await page.locator('#modal-form').getByRole('button',{name:'Сохранить',exact:true}).click();await page.waitForSelector('dialog:not([open])',{state:'attached'});assert.equal(await page.locator('.product').count(),0);
+ await page.click('[data-nav="products"]');assert.equal(await page.locator('[data-level]').count(),0);await page.screenshot({path:'.runtime/screenshots/all-products.png'});
+ const final=await(await page.request.get(base+'/api/state')).json(),p=final.products.find(p=>p.id===pid);assert.equal(p.purchase_policy,'catalog');assert.equal(p.observation.level,0);assert.equal(final.orders.length,1);assert.ok(final.deliveries.some(d=>d.number==='TRIAL-BROWSER'));
+ await page.setViewportSize({width:390,height:844});await page.selectOption('#language','sr');await page.waitForFunction(()=>document.documentElement.lang==='sr-Latn');await page.waitForSelector('.product');assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);assert.equal(/[А-Яа-яЁё]/.test(await page.locator('#content').innerText()),false);await page.screenshot({path:'.runtime/screenshots/all-products-mobile.png'});
+ assert.deepEqual(errors,[]);console.log('Purchasing lifecycle passed: staff proposal, approval, receipt, zero stock, regular choice, demotion with reason, forecast exclusion, history and mobile Serbian.');
+}finally{if(browser)await browser.close();proc.kill();await rm(dir,{recursive:true,force:true})}

@@ -43,13 +43,14 @@ let state,
   buffer = .5,
   overrides = {},
   toastTimer;
-const nav = [['stock', '▦', t("Остатки")],['favorites','♡',t('Избранное')], ['order', '▤', t("План закупки")], ['products', '◇', t("Каталог")], ['deliveries', '▱', t("Поступления")], ['attendance', '▥', t("Посещаемость")]];
+const nav = [['stock', '▦', t('Кладовая')],['favorites','♡',t('Избранное')], ['order', '▤', t("План закупки")], ['products', '◇', t('Все товары')], ['deliveries', '▱', t("Поступления")], ['attendance', '▥', t("Посещаемость")]];
 const products = () => state.products.filter(p => p.office === selectedOffice);
 const favoriteProducts=()=>products().filter(p=>p.favorite);
 const active=()=>products().filter(p=>p.in_pantry);
 let supplierFilter='',favoriteOnly=false;
 try{const saved=JSON.parse(sessionStorage.getItem('pantry_filters')||'{}');supplierFilter=saved.supplier||'';category=saved.category||'Все товары';favoriteOnly=Boolean(saved.favorites)}catch{}
-let catalogShowArchived=false;
+let catalogShowArchived=false,pantryTab='regular';
+const pantryProducts=()=>active().filter(p=>p.purchase_policy===pantryTab);
 function notify(message, error = false) {
   const el = $('#toast');
   el.textContent = t(message);
@@ -89,8 +90,23 @@ function icon(p) {
 }
 const illustration = p => `<span class="illustration" role="img" aria-label="${t("Иллюстрация:")} ${esc(p.name)}">${icon(p)}</span>`;
 function photo(p) {
-  return p.image ? `<img src="${esc(p.image)}" alt="${esc(p.name)}" loading="lazy" referrerpolicy="no-referrer">` : illustration(p);
+  if(!p.image)return `<span class="photo-empty">${illustration(p)}<small>${t('Фото не добавлено')}</small></span>`;
+  if(p.photo_status==='missing')return `<span class="photo-empty photo-warning"><span aria-hidden="true">▧</span><small>${t('Файл фото не найден')}</small></span>`;
+  return `<img src="${esc(p.image)}" alt="${esc(p.name)}" data-product-photo loading="lazy" referrerpolicy="no-referrer">`;
 }
+function bindPhotoErrors(){
+ $$('img[data-product-photo]').forEach(img=>{img.onerror=()=>{
+  const box=document.createElement('span');box.className='photo-empty photo-warning';const caption=document.createElement('small');caption.textContent=t('Фото не загрузилось');const retry=document.createElement('button');retry.type='button';retry.className='text-link';retry.textContent=t('Повторить');retry.onclick=async()=>{await load();redrawProducts()};box.append(caption,retry);img.replaceWith(box);
+ };if(img.complete&&img.naturalWidth===0&&img.currentSrc)img.onerror()});
+}
+function photoButton(p){return !staffMode&&(!p.image||p.archived||p.photo_status==='missing')?`<button type="button" class="text-link photo-select" data-photo-select="${p.id}">${t('Выбрать фото из каталога')}</button>`:''}
+function bindPhotoButtons(){
+ $$('[data-photo-select]').forEach(b=>b.onclick=()=>photoPicker(Number(b.dataset.photoSelect)));
+ if($('#open-photo-catalog'))$('#open-photo-catalog').onclick=()=>{view='products';catalogShowArchived=false;favoriteOnly=false;search='';sessionStorage.setItem('pantry_view',view);rememberFilters();render()};
+ if($('#photo-file-help'))$('#photo-file-help').onclick=photoHelp;
+ bindPhotoErrors();
+}
+function photoHelp(){modal(t('Восстановление фотографий'),`<p class="help-text">${t('База содержит ссылку на фото, но файл не найден. Скопируйте всю папку .runtime/catalog-images из прежней версии в текущую .runtime. Затем обновите страницу.')}</p><p class="help-text" style="margin-top:15px">${t('Если прежней папки нет, можно заново импортировать products-*.json в режиме «Только в справочник поставщика». Это восстановит встроенные фото, не меняя остатки в кладовой.')}</p>`)}
 function badge(p) {
   const o = p.observation;
   if (!o) return t("<span class=\"badge warn\">Не проверено</span>");
@@ -102,7 +118,7 @@ function pagehead(eyebrow, title, sub, action = '') {
   return `<div class="pagehead"><div><div class="eyebrow">${eyebrow}</div><h1>${title}</h1><p class="subtitle">${sub}</p></div>${action}</div>`;
 }
 function render() {
-  $('#app').innerHTML = `<div class="layout"><aside class="sidebar"><div class="brand"><span class="brandmark">♧</span><div>office pantry<small>${t("забота об офисе")}</small></div></div><div class="side-label">${t("РАБОЧЕЕ ПРОСТРАНСТВО")}</div><nav class="nav" aria-label="${t("Основная навигация")}">${nav.filter(n => !staffMode || ['stock','favorites'].includes(n[0])).map(([id, i, n]) => `<button data-nav="${id}" class="${view === id ? 'active' : ''}"><span class="nav-icon">${i}</span>${n}${id==='favorites'?`<span class="nav-count">${favoriteProducts().length}</span>`:''}</button>`).join('')}</nav><div class="side-foot"><span class="dot"></span> ${t("Всё в одной кладовой")}<br><span class="tiny">MVP · ${t("данные сохраняются на сервере")}</span><br><a class="text-link tiny" href="?mode=staff">${t("Интерфейс хозяюшки")}</a><br><button class="text-link tiny" id="backup" style="margin-top:12px">${t("Резервная копия")}</button></div></aside><main class="main"><header class="topbar"><span class="breadcrumb">${t("Рабочее пространство")} &nbsp; / &nbsp; ${nav.find(n => n[0] === view)[2]}</span><div class="top-right"><select id="office" aria-label="${t("Офис")}">${state.offices.map(o => `<option value="${esc(o)}" ${o === selectedOffice ? 'selected' : ''}>${esc(label(o))}</option>`).join('')}</select><select id="language" aria-label="Language / Jezik / Язык"><option value="ru">Русский</option><option value="sr">Srpski</option><option value="en">English</option></select><span class="avatar">OP</span></div></header><div class="content" id="content"></div></main></div>`;
+  $('#app').innerHTML = `<div class="layout"><aside class="sidebar"><div class="brand"><span class="brandmark">♧</span><div>office pantry<small>${t("забота об офисе")}</small></div></div><div class="side-label">${t("РАБОЧЕЕ ПРОСТРАНСТВО")}</div><nav class="nav" aria-label="${t("Основная навигация")}">${nav.filter(n => !staffMode || ['stock','products','favorites'].includes(n[0])).map(([id, i, n]) => `<button data-nav="${id}" class="${view === id ? 'active' : ''}"><span class="nav-icon">${i}</span>${n}${id==='favorites'?`<span class="nav-count">${favoriteProducts().length}</span>`:''}</button>`).join('')}</nav><div class="side-foot"><span class="dot"></span> ${t("Всё в одной кладовой")}<br><span class="tiny">MVP · ${t("данные сохраняются на сервере")}</span><br><a class="text-link tiny" href="?mode=staff">${t("Интерфейс хозяюшки")}</a><br><button class="text-link tiny" id="backup" style="margin-top:12px">${t("Резервная копия")}</button></div></aside><main class="main"><header class="topbar"><span class="breadcrumb">${t("Рабочее пространство")} &nbsp; / &nbsp; ${nav.find(n => n[0] === view)[2]}</span><div class="top-right"><select id="office" aria-label="${t("Офис")}">${state.offices.map(o => `<option value="${esc(o)}" ${o === selectedOffice ? 'selected' : ''}>${esc(label(o))}</option>`).join('')}</select><select id="language" aria-label="Language / Jezik / Язык"><option value="ru">Русский</option><option value="sr">Srpski</option><option value="en">English</option></select><span class="avatar">OP</span></div></header><div class="content" id="content"></div></main></div>`;
   $('#language').value=getLanguage();
   $('#language').onchange=e=>setLanguage(e.target.value);
   $('#office').onchange = e => {
@@ -130,22 +146,17 @@ function render() {
   })[view]();
 }
 function stockView() {
-  const ps = active(),
-    checked = ps.filter(p => p.observation?.date === today()).length;
-  $('#content').innerHTML = pagehead(t("КЛАДОВАЯ ОФИСА"), t("Всё на своих местах"), t("Отметьте, сколько осталось. О количестве для заказа позаботится система."), `<button class="btn" id="inventory">＋ ${t("Точный остаток")}</button>`) + `<div class="hero"><div><div class="eyebrow">${t("БЫСТРЫЙ ОБХОД")}</div><h2>${t("Хороший день начинается")}<br> ${t("с полной кухни.")}</h2><p>${t("Проверьте весь запас товара в офисе: склад и обе кухни. После сегодняшних поставок выбирайте уровень — он сохранится сразу.")}</p></div><div class="hero-art" aria-hidden="true">🧺</div><div class="progress-info"><strong>${checked}<span class="muted"> / ${ps.length}</span></strong><div class="tiny muted">${t("проверено сегодня")}</div><div class="progress"><i style="width:${ps.length ? checked / ps.length * 100 : 0}%"></i></div></div></div><div class="toolbar"><h3>${t("Что есть в кладовой")} <span class="muted tiny">${ps.length} ${t("позиций")}</span></h3><div class="actions"><label class="checkbox tiny"><input type="checkbox" id="low" ${onlyLow ? 'checked' : ''}>${t("Только мало / нет")}</label><div class="search"><input type="search" id="search" placeholder="⌕  ${t("Найти продукт…")}" value="${esc(search)}" aria-label="${t("Поиск товара")}"></div></div></div>${filtersMarkup(ps)}<div class="tabs" id="categories"></div><div class="grid" id="cards"></div><p class="footer-note">${t("Иллюстрации условные. Реальные фото можно загрузить в карточке товара. Уровни означают разное количество для каждого товара — их настраивает администратор.")}</p>`;
-  if (staffMode) {
-    $('#inventory').remove();
-    $('.side-foot').innerHTML = t("<span class=\"dot\"></span>Режим обхода<br><span class=\"tiny\">Отмечайте остатки во всём офисе</span>");
-  } else $('#inventory').onclick = () => observationModal();
-  $('#search').oninput = e => {
-    search = e.target.value;
-    drawCards();
-  };
-  $('#low').onchange = e => {
-    onlyLow = e.target.checked;
-    drawCards();
-  };
+  const ps=pantryProducts(),checked=ps.filter(p=>p.observation?.date===today()).length;
+  $('#content').innerHTML=pagehead(t('КЛАДОВАЯ ОФИСА'),t('Кладовая'),t('Регулярные товары и полученные товары на пробу. Отмечайте фактический остаток.'),staffMode?'':`<button class="btn" id="inventory">＋ ${t('Точный остаток')}</button>`)+`<div class="pantry-summary"><div class="assortment-tabs"><button class="chip ${pantryTab==='regular'?'active':''}" data-assortment="regular">${t('Постоянные')} <span>${active().filter(p=>p.purchase_policy==='regular').length}</span></button><button class="chip ${pantryTab==='trial'?'active':''}" data-assortment="trial">${t('На пробу')} <span>${active().filter(p=>p.purchase_policy==='trial').length}</span></button></div><div class="progress-info"><strong>${checked} / ${ps.length}</strong><span class="tiny muted"> ${t('проверено сегодня')}</span><div class="progress"><i style="width:${ps.length?checked/ps.length*100:0}%"></i></div></div></div>${pantryTab==='trial'?`<p class="notice info">${t('Товары на пробу не входят в автоматический расчёт заказа. Сделайте товар регулярным, если он понравился.')}</p>`:''}<div class="toolbar"><h3>${t('Что есть в кладовой')}</h3><div class="actions"><label class="checkbox tiny"><input type="checkbox" id="low" ${onlyLow?'checked':''}>${t('Только мало / нет')}</label><input type="search" id="search" placeholder="${t('Найти продукт…')}" value="${esc(search)}" aria-label="${t('Поиск товара')}"></div></div>${photoNotices(ps)}${filtersMarkup(ps)}<div class="tabs" id="categories"></div><div class="grid" id="cards"></div>`;
+  $$('[data-assortment]').forEach(b=>b.onclick=()=>{pantryTab=b.dataset.assortment;stockView()});
+  if(!staffMode)$('#inventory').onclick=()=>observationModal();
+  $('#search').oninput=e=>{search=e.target.value;drawCards()};
+  $('#low').onchange=e=>{onlyLow=e.target.checked;drawCards()};
   bindFilters(stockView);drawCategoryTabs(ps,stockView);drawCards();
+}
+function photoNotices(ps){
+ const old=ps.filter(p=>p.archived&&!p.image),missing=ps.filter(p=>p.photo_status==='missing');
+ return `${old.length?`<div class="notice" id="legacy-photo-notice"><strong>${t('Архивные карточки без фото')}: ${old.length}.</strong> ${t('Это старые позиции из Excel. Фотографии новых товаров находятся в каталоге для заказа. Можно добавить нужный товар в кладовую или выбрать только фото для старой карточки.')} <button class="text-link" id="open-photo-catalog">${t('Открыть каталог с фото')}</button></div>`:''}${missing.length?`<div class="notice"><strong>${t('Файл фото не найден')}: ${missing.length}.</strong> <button class="text-link" id="photo-file-help">${t('Как восстановить фото')}</button></div>`:''}`;
 }
 function rememberFilters(){sessionStorage.setItem('pantry_filters',JSON.stringify({supplier:supplierFilter,category,favorites:favoriteOnly}))}
 function filtersMarkup(ps){
@@ -168,22 +179,37 @@ function drawCategoryTabs(ps,redraw){
 }
 function favoritesView(){
  const ps=favoriteProducts();
- $('#content').innerHTML=pagehead(t('ВАШ ВЫБОР'),t('Избранное'),t('Любимые товары для быстрого поиска. Сердечко не добавляет товар в кладовую.'))+`<div class="toolbar"><span class="muted">${ps.length} ${t('позиций')}</span><input id="search" type="search" placeholder="${t('Найти продукт…')}" value="${esc(search)}" aria-label="${t('Поиск товара')}"></div>${filtersMarkup(ps)}<div class="tabs" id="categories"></div><div class="grid" id="cards"></div>`;
+ $('#content').innerHTML=pagehead(t('ВАШ ВЫБОР'),t('Избранное'),t('Любимые товары для быстрого поиска. Сердечко не добавляет товар в кладовую.'))+`<div class="toolbar"><span class="muted">${ps.length} ${t('позиций')}</span><input id="search" type="search" placeholder="${t('Найти продукт…')}" value="${esc(search)}" aria-label="${t('Поиск товара')}"></div>${photoNotices(ps)}${filtersMarkup(ps)}<div class="tabs" id="categories"></div><div class="grid" id="cards"></div>`;
  $('#search').oninput=e=>{search=e.target.value;drawCards()};bindFilters(favoritesView);drawCategoryTabs(ps,favoritesView);drawCards();
 }
 function favoriteButton(p,table=false){return `<button type="button" class="favorite-button ${table?'in-table':''} ${p.favorite?'selected':''}" data-favorite="${p.id}" aria-pressed="${Boolean(p.favorite)}" aria-label="${t(p.favorite?'Убрать из избранного':'Добавить в избранное')} ${esc(p.name)}" title="${t(p.favorite?'Убрать из избранного':'Добавить в избранное')}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z"/></svg></button>`}
-function pantryButton(p){return `<button type="button" class="btn small pantry-button" data-pantry="${p.id}">${t(p.in_pantry?'Убрать из кладовой':'Добавить в кладовую')}</button>`}
+function policyLabel(p){return t(p.purchase_policy==='regular'?'Регулярный':p.purchase_policy==='trial'?(p.trial_received?'На пробу':'Ожидаем поставку'):'Только в каталоге')}
+function pantryButton(p){
+ if(staffMode)return '';
+ return `<div class="policy-actions">${p.purchase_policy!=='regular'?`<button type="button" class="btn small pantry-button" data-pantry="${p.id}">${t('Сделать регулярным')}</button>`:`<button type="button" class="btn small" data-policy="trial" data-product="${p.id}">${t('Перевести на пробу')}</button>`}${p.purchase_policy==='trial'?`<button type="button" class="text-link" data-policy="catalog" data-product="${p.id}">${t('Завершить пробу')}</button>`:''}</div>`;
+}
+function proposalButton(p){
+ if(p.archived||!p.active||p.purchase_policy!=='catalog')return '';
+ const pending=state.proposals.some(r=>r.product_id===p.id&&r.status==='pending');
+ return `<button type="button" class="btn primary small propose-button" data-propose="${p.id}" ${pending?'disabled':''}>${t(pending?'Предложено на пробу':'Предложить на пробу')}</button>`;
+}
 function redrawProducts(){if(view==='products')productsView();else if(view==='favorites')favoritesView();else stockView()}
+function policyModal(id,policy){
+ const p=state.products.find(p=>p.id===id);
+ modal(t(policy==='trial'?'Перевести на пробу':policy==='catalog'?'Завершить пробу':'Сделать регулярным'),`<h3>${esc(p.name)}</h3><p class="help-text">${t(policy==='trial'?'Товар останется в кладовой, но не будет автоматически попадать в заказ. Остатки и история сохранятся.':policy==='catalog'?'Товар останется в каталоге. Остатки и история сохранятся, но товар исчезнет из обхода.':'Товар станет частью постоянного ассортимента и расчёта закупки.')}</p>${field(t('Причина (необязательно)'),'reason')}${foot()}`,async f=>{await api('product-policy',{product_id:id,policy,reason:f.get('reason')});notify(t('Статус закупки сохранён'))});cancel();
+}
 function bindProductFlags(){
- $$('[data-favorite],[data-pantry]').forEach(button=>button.onclick=async()=>{
-  const field=button.dataset.favorite?'favorite':'in_pantry',id=Number(button.dataset.favorite||button.dataset.pantry),p=state.products.find(p=>p.id===id);button.disabled=true;
-  try{const result=await api('product-flags',{product_id:id,[field]:!p[field]});p[field]=result[field];redrawProducts();if(field==='favorite')notify(t(p.favorite?'Добавлено в избранное':'Удалено из избранного'));else notify(t(p.in_pantry?'Товар добавлен в кладовую':'Товар убран из обхода. История сохранена.'))}
-  catch(e){button.disabled=false;notify(e.message,true)}
+ $$('[data-favorite]').forEach(button=>button.onclick=async()=>{
+  const id=Number(button.dataset.favorite),p=state.products.find(p=>p.id===id);button.disabled=true;
+  try{Object.assign(p,await api('product-flags',{product_id:id,favorite:!p.favorite}));redrawProducts();notify(t(p.favorite?'Добавлено в избранное':'Удалено из избранного'))}catch(e){button.disabled=false;notify(e.message,true)}
  });
+ $$('[data-pantry]').forEach(b=>b.onclick=()=>policyModal(Number(b.dataset.pantry),'regular'));
+ $$('[data-policy]').forEach(b=>b.onclick=()=>policyModal(Number(b.dataset.product),b.dataset.policy));
+ $$('[data-propose]').forEach(b=>b.onclick=()=>{const id=Number(b.dataset.propose),p=state.products.find(p=>p.id===id);modal(t('Предложить на пробу'),`<h3>${esc(p.name)}</h3><p class="help-text">${t('Предложение появится в плане закупки. Администратор выберет количество и одобрит покупку.')}</p>${field(t('Примечание'),'note')}${foot(t('Предложить на пробу'))}`,async f=>{await api('proposals',{product_id:id,note:f.get('note')});notify(t('Предложение отправлено в план закупки'))});cancel()});
  const count=$('[data-nav="favorites"] .nav-count');if(count)count.textContent=favoriteProducts().length;
 }
 function drawCards() {
-  const base=view==='favorites'?favoriteProducts():active();
+  const base=view==='favorites'?favoriteProducts():view==='products'?products().filter(p=>Boolean(p.archived)===catalogShowArchived):pantryProducts();
   const ps=selectedProducts(base,{low:view==='stock'&&onlyLow});$('#filter-count').textContent=`${t('Показано')}: ${ps.length} / ${base.length}`;
   $('#cards').innerHTML = ps.length ? ps.map(p => `<article class="product"><div class="product-img" style="background:${{
     'Напитки': '#eef0e9',
@@ -191,7 +217,7 @@ function drawCards() {
     'Фрукты и овощи': '#f1efe2',
     'Перекусы': '#efebe6',
     'Снеки': '#eee9e1'
-  }[p.category] || '#f1f2ec'}">${badge(p)}${favoriteButton(p)}<button class="edit-icon" data-edit="${p.id}" aria-label="${t("Редактировать")} ${esc(p.name)}">↗</button>${photo(p)}</div><div class="product-body"><div class="product-meta">${esc(label(p.supplier))} · ${esc(label(p.unit))}</div><h3 class="product-name">${esc(p.name)}</h3><div class="category-caption">${esc(label(p.category))}${p.archived?` · ${t('Архив каталога')}`:''}</div>${p.in_pantry?`<div class="level-label"><span>${t("СКОЛЬКО ОСТАЛОСЬ?")}</span><span>${p.observation ? date(p.observation.date).slice(0, 5) : '—'}</span></div><div class="levels">${state.levels.map((l, i) => `<button class="level ${p.observation?.kind === 'level' && p.observation.level === i ? 'selected' : ''}" data-level="${p.id}:${i}" aria-pressed="${p.observation?.kind === 'level' && p.observation.level === i}" title="${t("Оценка для расчёта:")} ${fmt(p.thresholds[i])} ${esc(label(p.unit))}">${esc(label(l))}</button>`).join('')}</div><div class="stock-foot">${p.observation?.kind === 'exact' ? t("Точная инвентаризация") : p.observation?.kind === 'estimate' ? t("Приблизительная оценка") : p.observation ? t("Отметка уровня") : t("Остаток не указан")} · ${p.rate == null ? t("Норма пока не задана") : t("Весь офис")}</div>`:`<p class="stock-foot">${t(p.archived||!p.active?'Недоступен для заказа':'Есть в ассортименте, ещё не в кладовой')}</p>`}${!staffMode?pantryButton(p):''}</div></article>`).join('') : t("<div class=\"empty full\"><h2>Здесь пока пусто</h2><p>Добавьте товары в каталоге или измените фильтр.</p></div>");
+  }[p.category] || '#f1f2ec'}"><span class="badge policy-badge ${p.purchase_policy}">${policyLabel(p)}</span>${favoriteButton(p)}<button class="edit-icon" data-edit="${p.id}" aria-label="${t("Редактировать")} ${esc(p.name)}">↗</button>${photo(p)}</div><div class="product-body"><div class="product-meta">${esc(label(p.supplier))} · ${esc(label(p.unit))}</div><h3 class="product-name">${esc(p.name)}</h3><div class="category-caption">${esc(label(p.category))}${p.archived?` · ${t('Архив каталога')}`:''}</div>${view==='stock'&&p.in_pantry?`${badge(p)}<div class="level-label"><span>${t("СКОЛЬКО ОСТАЛОСЬ?")}</span><span>${p.observation ? date(p.observation.date).slice(0, 5) : '—'}</span></div><div class="levels">${state.levels.map((l, i) => `<button class="level ${p.observation?.kind === 'level' && p.observation.level === i ? 'selected' : ''}" data-level="${p.id}:${i}" aria-pressed="${p.observation?.kind === 'level' && p.observation.level === i}" title="${t("Оценка для расчёта:")} ${fmt(p.thresholds[i])} ${esc(label(p.unit))}">${esc(label(l))}</button>`).join('')}</div><div class="stock-foot">${p.observation?.kind === 'exact' ? t("Точная инвентаризация") : p.observation?.kind === 'estimate' ? t("Приблизительная оценка") : p.observation ? t("Отметка уровня") : t("Остаток не указан")} · ${p.rate == null ? t("Норма пока не задана") : t("Весь офис")}</div>`:`<p class="stock-foot">${t(p.archived||!p.active?'Недоступен для заказа':p.purchase_policy==='regular'?'Уже в кладовой':p.purchase_policy==='trial'?(p.trial_received?'На пробу в кладовой':'После поступления появится в кладовой'):'Можно предложить для пробной закупки')}</p>`}${p.image_source?.illustrative?`<p class="stock-foot">${t('Фото выбранного варианта. Остаток относится ко всей старой позиции.')}</p>`:''}${p.policy_reason?`<p class="stock-foot">${esc(p.policy_reason)}</p>`:''}${photoButton(p)}${proposalButton(p)}${pantryButton(p)}${!staffMode&&p.in_pantry?`<button class="text-link calibration-link" data-calibrate="${p.id}">${t('Калибровка')}</button>`:''}</div></article>`).join('') : t("<div class=\"empty full\"><h2>Здесь пока пусто</h2><p>Добавьте товары в каталоге или измените фильтр.</p></div>");
   if(!ps.length)$('#cards').innerHTML=`<div class="empty full"><h2>${t(view==='favorites'&&favoriteProducts().length===0?'В избранном пока нет товаров':view==='stock'&&base.length===0?'В кладовой пока нет товаров':'По выбранным фильтрам ничего не найдено')}</h2><p>${t(view==='favorites'?'Нажмите сердечко у товара в каталоге или кладовой.':'Добавьте нужные товары из каталога в кладовую или сбросьте фильтры.')}</p></div>`;
   bindProductFlags();
   if (staffMode) $$('[data-edit]').forEach(b => b.remove());else bindEdit();
@@ -213,13 +239,10 @@ function drawCards() {
       drawCards();
     }
   });
-  $$('img').forEach(img => img.onerror = () => {
-    img.replaceWith(Object.assign(document.createElement('span'), {
-      className: 'illustration',
-      textContent: '🛍️'
-    }));
-  });
+  bindPhotoButtons();
+  $$('[data-calibrate]').forEach(b=>b.onclick=()=>calibrationModal(Number(b.dataset.calibrate)));
 }
+
 function bindEdit() {
   $$('[data-edit]').forEach(b => b.onclick = () => productModal(Number(b.dataset.edit)));
 }
@@ -264,7 +287,7 @@ function productModal(id) {
     thresholds: [0, 1, 3, 6, 12, 24],
     active: true
   };
-  modal(id ? t("Карточка товара") : t("Новый товар"), `<div class="form-grid">${field(t("Название как у поставщика"), 'name', p.name, 'text', 'required')}${field(t("Артикул поставщика"),'supplier_sku',p.supplier_sku)}${field(t("Поставщик"), 'supplier', p.supplier, 'text', 'required list="supplier-options"')}<datalist id="supplier-options">${suppliersFor(products(),state.suppliers||[]).map(v=>`<option value="${esc(v)}">`).join('')}</datalist><label class="field"><span>${t('Категория')}</span><select name="category" id="edit-category">${categoriesFor(products(),state.categories||[]).map(c=>`<option value="${esc(c)}" ${p.category===c?'selected':''}>${esc(label(c))}</option>`).join('')}<option value="__new__">${t('Своя категория…')}</option></select>${p.category_source==='auto'?`<small>${t('Категория подобрана автоматически. Можно изменить.')}</small>`:''}</label><label class="field" id="new-category-field" hidden><span>${t('Название новой категории')}</span><input name="custom_category" id="custom-category" maxlength="150"></label>${field(t("Единица учёта (шт., кг, л)"), 'unit', p.unit, 'text', 'required')}${field(t("Шаг заказа в единицах учёта"), 'step', p.step, 'number', 'min="0.001" step="any" required')}${field(t("Цена за единицу, RSD (неизвестна — пусто)"), 'price', p.price, 'number', 'min="0" step="any"')}${field(t("Норма на человеко-день (неизвестна — пусто)"), 'rate', p.rate, 'number', 'min="0" step="any"')}${field(t("Лимит целевого запаса (необязательно)"), 'max_stock', p.max_stock, 'number', 'min="0" step="any"')}${p.name_status==='provisional'?`<div class="full notice">${t('Название поставщика ещё не сверено. Можно связать товар с оригинальной карточкой через справочник.')}</div>`:''}<div class="full notice info">${t("Норма — расход в единицах товара на одно посещение офиса за день.")} ${esc(label(p.rate_source) || t("Настраивается вручную"))}. ${t("Для скоропортящегося задайте лимит запаса. Сроки партий пока не учитываются.")}</div><div class="full"><h3>${t("Что означает каждый уровень")}</h3><p class="tiny muted" style="margin:5px 0 12px">${t("Представительное количество для расчёта, не границы интервалов. «Нет» всегда 0. Настройки сразу влияют на последнюю отметку уровня.")}</p><div class="thresholds">${state.levels.map((l, i) => field(esc(label(l)), 't' + i, p.thresholds[i], 'number', `step="any" min="0" required ${i === 0 ? 'readonly' : ''}`)).join('')}</div></div>${field(t("Ссылка на товар в магазине"), 'url', p.url, 'url', 'placeholder="https://…"')}${field(t("Ссылка на фото"), 'image', (p.image?.startsWith('data:')||p.image?.startsWith('/assets/')) ? '' : p.image, 'url', 'placeholder="https://…"')}<label class="field full"><span>${t("Или загрузите реальное фото (до 2 МБ)")}</span><input type="file" name="photo" accept="image/png,image/jpeg,image/webp"></label><label class="field full"><span>${t("Примечание")}</span><textarea name="notes">${esc(p.notes)}</textarea></label>${p.archived?`<label class="checkbox full"><input type="checkbox" name="restore">${t('Восстановить из архива')}</label>`:''}<label class="checkbox full"><input type="checkbox" name="active" ${p.active ? 'checked' : ''}>${t('Доступен для заказа')}</label><label class="checkbox full"><input type="checkbox" name="in_pantry" ${p.in_pantry?'checked':''}>${t('Учитывать в кладовой')}</label></div>${foot()}`, async f => {
+  modal(id ? t("Карточка товара") : t("Новый товар"), `<div class="form-grid">${field(t("Название как у поставщика"), 'name', p.name, 'text', 'required')}${field(t("Артикул поставщика"),'supplier_sku',p.supplier_sku)}${field(t("Поставщик"), 'supplier', p.supplier, 'text', 'required list="supplier-options"')}<datalist id="supplier-options">${suppliersFor(products(),state.suppliers||[]).map(v=>`<option value="${esc(v)}">`).join('')}</datalist><label class="field"><span>${t('Категория')}</span><select name="category" id="edit-category">${categoriesFor(products(),state.categories||[]).map(c=>`<option value="${esc(c)}" ${p.category===c?'selected':''}>${esc(label(c))}</option>`).join('')}<option value="__new__">${t('Своя категория…')}</option></select>${p.category_source==='auto'?`<small>${t('Категория подобрана автоматически. Можно изменить.')}</small>`:''}</label><label class="field" id="new-category-field" hidden><span>${t('Название новой категории')}</span><input name="custom_category" id="custom-category" maxlength="150"></label>${field(t("Единица учёта (шт., кг, л)"), 'unit', p.unit, 'text', 'required')}${field(t("Шаг заказа в единицах учёта"), 'step', p.step, 'number', 'min="0.001" step="any" required')}${field(t("Цена за единицу, RSD (неизвестна — пусто)"), 'price', p.price, 'number', 'min="0" step="any"')}${field(t("Норма на человеко-день (неизвестна — пусто)"), 'rate', p.rate, 'number', 'min="0" step="any"')}${field(t("Лимит целевого запаса (необязательно)"), 'max_stock', p.max_stock, 'number', 'min="0" step="any"')}${p.name_status==='provisional'?`<div class="full notice">${t('Название поставщика ещё не сверено. Можно связать товар с оригинальной карточкой через справочник.')}</div>`:''}<div class="full notice info">${t("Норма — расход в единицах товара на одно посещение офиса за день.")} ${esc(label(p.rate_source) || t("Настраивается вручную"))}. ${t("Для скоропортящегося задайте лимит запаса. Сроки партий пока не учитываются.")}</div><div class="full"><h3>${t("Что означает каждый уровень")}</h3><p class="tiny muted" style="margin:5px 0 12px">${t("Представительное количество для расчёта, не границы интервалов. «Нет» всегда 0. Настройки сразу влияют на последнюю отметку уровня.")}</p><div class="thresholds">${state.levels.map((l, i) => field(esc(label(l)), 't' + i, p.thresholds[i], 'number', `step="any" min="0" required ${i === 0 ? 'readonly' : ''}`)).join('')}</div></div>${field(t("Ссылка на товар в магазине"), 'url', p.url, 'url', 'placeholder="https://…"')}${field(t("Ссылка на фото"), 'image', (p.image?.startsWith('data:')||p.image?.startsWith('/assets/')) ? '' : p.image, 'url', 'placeholder="https://…"')}<label class="field full"><span>${t("Или загрузите реальное фото (до 2 МБ)")}</span><input type="file" name="photo" accept="image/png,image/jpeg,image/webp"></label><label class="field full"><span>${t("Примечание")}</span><textarea name="notes">${esc(p.notes)}</textarea></label>${p.archived?`<label class="checkbox full"><input type="checkbox" name="restore">${t('Восстановить из архива')}</label>`:''}<label class="checkbox full"><input type="checkbox" name="active" ${p.active ? 'checked' : ''}>${t('Доступен для заказа')}</label><label class="field full"><span>${t('Статус закупки')}</span><select name="purchase_policy">${['catalog','trial','regular'].map(v=>`<option value="${v}" ${(p.purchase_policy||'catalog')===v?'selected':''}>${t(v==='catalog'?'Только в каталоге':v==='trial'?'На пробу':'Регулярный')}</option>`).join('')}</select></label></div>${foot()}`, async f => {
     let image = f.get('image');
     const file = f.get('photo');
     if (file?.size) {
@@ -278,7 +301,6 @@ function productModal(id) {
       id,
       category:f.get('category')==='__new__'?String(f.get('custom_category')).trim():f.get('category'),
       category_source:'manual',
-      in_pantry:f.has('in_pantry'),
       active: f.has('active'),
       archived: Boolean(p.archived)&&!f.has('restore'),
       image,
@@ -305,22 +327,11 @@ function observationModal(pid) {
   cancel();
 }
 function productsView() {
-  const base=products().filter(p=>Boolean(p.archived)===catalogShowArchived);const ps=selectedProducts(base);
-  $('#content').innerHTML = pagehead(t("НАСТРОЙКИ КЛАДОВОЙ"), t('Каталог для заказа'),t('Ассортимент поставщиков. Добавляйте нужные товары в кладовую и избранное.'), `<button class="btn primary" id="add-product">＋ ${t("Добавить товар")}</button>`) + `<div class="toolbar"><input type="search" id="catalog-search" placeholder="⌕  ${t("Поиск по каталогу")}" value="${esc(search)}"><button class="btn" id="exact">${t("Точная инвентаризация")}</button><label class="checkbox tiny"><input type="checkbox" id="show-archived" ${catalogShowArchived?'checked':''}>${t('Архив')}</label></div>${filtersMarkup(base)}<div class="table-wrap"><table><thead><tr><th>${t("Товар")}</th><th>${t("Поставщик")}</th><th>${t("Норма / чел.-день")}</th><th>${t("Остаток")}*</th><th>${t("Настройки")}</th></tr></thead><tbody>${ps.map(p => `<tr><td class="name"><div class="catalog-name">${favoriteButton(p,true)}<strong>${esc(p.name)}</strong></div>${p.name_status==='provisional'?`<span class="badge warn">${t('Название не сверено')}</span>`:''}<small>${esc(p.supplier_sku||'')} · ${esc(label(p.category))} · ${esc(label(p.unit))} ${p.active ? '' : t('· недоступен для заказа')}</small></td><td>${esc(label(p.supplier))}</td><td>${fmt(p.rate)}<div class="tiny muted">${p.rate == null ? t("Нужно настроить") : esc(label(p.rate_source))}</div></td><td>${fmt(p.estimated_stock)}<div class="tiny muted">${date(p.observation?.date)}</div></td><td><div class="actions"><button class="btn small" data-edit="${p.id}">${t("Изменить")}</button><button class="btn small" data-calibrate="${p.id}">${t("Калибровка")}</button>${pantryButton(p)}</div></td></tr>`).join('')}</tbody></table></div><p class="footer-note">* ${t("Последний остаток + поступления после даты проверки. Расход после проверки не вычитается: обновляйте отметки перед расчётом заказа.")}</p>`;
-  bindFilters(productsView);$('#filter-count').textContent=`${t('Показано')}: ${ps.length} / ${base.length}`;bindProductFlags();
-  $('#show-archived').onchange=e=>{catalogShowArchived=e.target.checked;productsView()};
-  $('#add-product').onclick = () => productModal();
-  $('#exact').onclick = () => observationModal();
-  const btn=document.createElement('button');btn.className='btn';btn.id='supplier-catalog';btn.textContent=t('Справочники поставщиков');btn.onclick=()=>supplierCatalogue();$('.toolbar').append(btn);
-  $('#catalog-search').oninput = e => {
-    const pos = e.target.selectionStart;
-    search = e.target.value;
-    productsView();
-    $('#catalog-search').focus();
-    $('#catalog-search').setSelectionRange(pos, pos);
-  };
-  bindEdit();
-  $$('[data-calibrate]').forEach(b => b.onclick = () => calibrationModal(Number(b.dataset.calibrate)));
+ const base=products().filter(p=>Boolean(p.archived)===catalogShowArchived);
+ $('#content').innerHTML=pagehead(t('АССОРТИМЕНТ ПОСТАВЩИКОВ'),t('Все товары'),t('Выбирайте новые товары на пробу. Остатки отмечаются во вкладке «Кладовая».'),staffMode?'':`<button class="btn primary" id="add-product">＋ ${t('Добавить товар')}</button>`)+`<div class="toolbar"><input type="search" id="catalog-search" placeholder="${t('Поиск по каталогу')}" value="${esc(search)}">${staffMode?'':`<label class="checkbox tiny"><input type="checkbox" id="show-archived" ${catalogShowArchived?'checked':''}>${t('Архив')}</label><button class="btn" id="supplier-catalog">${t('Справочники поставщиков')}</button>`}</div>${filtersMarkup(base)}<div class="tabs" id="categories"></div><div class="grid" id="cards"></div>`;
+ bindFilters(productsView);drawCategoryTabs(base,productsView);drawCards();
+ $('#catalog-search').oninput=e=>{search=e.target.value;drawCards()};
+ if(!staffMode){$('#show-archived').onchange=e=>{catalogShowArchived=e.target.checked;productsView()};$('#add-product').onclick=()=>productModal();$('#supplier-catalog').onclick=()=>supplierCatalogue()}
 }
 async function calibrationModal(pid) {
   try {
@@ -340,7 +351,7 @@ async function calibrationModal(pid) {
   }
 }
 function rowsForOrder() {
-  return active().filter(p=>p.active&&!p.archived).map(p => {
+  return active().filter(p=>p.purchase_policy==='regular'&&p.active&&!p.archived).map(p => {
     const r = recommend(p, visits, buffer);
     return {
       p,
@@ -356,7 +367,8 @@ function orderView() {
     stale = rows.filter(r => !r.p.observation || age(r.p.observation.date) > 7);
   const cost = buy.reduce((s, r) => s + (r.p.price ?? 0) * r.orderQty, 0),
     unknownPrices = buy.filter(r => r.p.price == null).length;
-  $('#content').innerHTML = pagehead(t("ПЛАНИРОВАНИЕ"), t("Закупка без догадок"), t("Посещаемость → прогноз расхода → список по поставщикам."), `<button class="btn primary" id="save-order">${t("Сохранить список")}</button>`) + `<div class="panel"><div class="form-grid">${field(t("Прогноз человеко-дней на период"), 'visits', visits, 'number', 'id="visits" min="0" step="1" required')}${field(t("Страховой запас, %"), 'buffer', buffer * 100, 'number', 'id="buffer" min="0" max="200" step="1" required')}<div class="full help-text">${t("Человеко-дни — сумма посещений за планируемый период. Например: 48 человек × 5 дней")} = 240. ${t("Изменение прогноза сбрасывает ручные количества. Период поставки выбирайте с учётом свежести продуктов.")}</div></div></div><div class="stats"><div class="stat"><label>${t("К заказу")}</label><strong>${buy.length}</strong><small>${t("товарных позиций")}</small></div><div class="stat"><label>${t("По известным ценам")}</label><strong>${fmt(cost)} <span class="tiny">RSD</span></strong><small>${unknownPrices ? t("Нет цены у ") + unknownPrices + t(" поз.") : t("Оценка, не сумма счёта")}</small></div><div class="stat"><label>${t("Нужна настройка")}</label><strong>${unknown.length}</strong><small>${t("нет нормы или остатка")}</small></div></div>${stale.length ? `<div class="notice">${t("У")} ${stale.length} ${t("товаров остатки старше 7 дней или отсутствуют. Расход после проверки не вычитается. Обновите отметки перед закупкой.")}</div>` : ''}<div class="toolbar"><h3>${t("Рекомендованный список")}</h3><div class="actions"><button class="btn" id="export-order">↓ ${t("Скачать CSV")}</button><button class="btn" id="copy-order">${t("Копировать список")}</button></div></div><div class="table-wrap"><table><thead><tr><th>${t("Товар")}</th><th>${t("Остаток")}</th><th>${t("Расход")}</th><th>${t("Цель с резервом")}</th><th>${t("Заказать")}</th><th></th></tr></thead><tbody>${rows.map(r => `<tr><td class="name"><strong>${esc(r.p.name)}</strong><small>${esc(label(r.p.supplier))} · ${t("шаг")} ${fmt(r.p.step)} ${esc(label(r.p.unit))}</small>${r.warning ? `<small style="color:#a17a31">${esc(t(r.warning))}</small>` : ''}${r.p.rate_source?.includes('Excel') ? t("<small>Приблизительная норма из Excel</small>") : ''}</td><td>${fmt(r.stock)}</td><td>${fmt(r.need)}</td><td>${fmt(r.target)}</td><td><input class="number" type="number" min="0" step="any" data-qty="${r.p.id}" value="${r.orderQty ?? ''}" placeholder="—" aria-label="${t("Заказать")} ${esc(r.p.name)}"> ${esc(label(r.p.unit))}</td><td><button class="text-link" data-edit="${r.p.id}">${t("Настроить")}</button></td></tr>`).join('')}</tbody></table></div><details class="panel"><summary>${t("Как считается заказ")}</summary><p class="help-text">${t("Расход")} = ${t("норма × человеко-дни. Цель")} = ${t("расход × (1 + резерв), с ограничением лимита запаса, если он задан. Заказ")} = max(0, ${t("цель − оценка остатка), округлённый вверх до шага упаковки. Уровень остатка заменяется количеством из настроек товара. При неизвестной норме или остатке автоматическая рекомендация отсутствует; количество можно ввести вручную. Лимит не гарантирует срок годности — проверяйте партии отдельно.")}</p></details><div class="section-head"><h2>${t("Сохранённые списки")}</h2></div><div class="table-wrap"><table><thead><tr><th>${t("Создан")}</th><th>${t("Посещения")}</th><th>${t("Позиций")}</th><th>${t("Список")}</th></tr></thead><tbody>${state.orders.filter(o => o.office === selectedOffice).map(o => `<tr><td>${date(o.created_at.slice(0, 10))}</td><td>${fmt(o.visits)}</td><td>${o.lines.length}</td><td><button class="text-link" data-saved-order="${o.id}">${t("Открыть")}</button></td></tr>`).join('') || t("<tr><td colspan=\"4\" class=\"muted\">Пока нет сохранённых списков. Список не меняет остатки — поставку вносят после получения.</td></tr>")}</tbody></table></div>`;
+  $('#content').innerHTML = pagehead(t("ПЛАНИРОВАНИЕ"), t("Закупка без догадок"), t("Посещаемость → прогноз расхода → список по поставщикам."), `<button class="btn primary" id="save-order">${t("Сохранить список")}</button>`) + `<div class="panel"><div class="form-grid">${field(t("Прогноз человеко-дней на период"), 'visits', visits, 'number', 'id="visits" min="0" step="1" required')}${field(t("Страховой запас, %"), 'buffer', buffer * 100, 'number', 'id="buffer" min="0" max="200" step="1" required')}<div class="full help-text">${t("Человеко-дни — сумма посещений за планируемый период. Например: 48 человек × 5 дней")} = 240. ${t("Изменение прогноза сбрасывает ручные количества. Период поставки выбирайте с учётом свежести продуктов.")}</div></div></div><div class="stats"><div class="stat"><label>${t("К заказу")}</label><strong>${buy.length}</strong><small>${t("товарных позиций")}</small></div><div class="stat"><label>${t("По известным ценам")}</label><strong>${fmt(cost)} <span class="tiny">RSD</span></strong><small>${unknownPrices ? t("Нет цены у ") + unknownPrices + t(" поз.") : t("Оценка, не сумма счёта")}</small></div><div class="stat"><label>${t("Нужна настройка")}</label><strong>${unknown.length}</strong><small>${t("нет нормы или остатка")}</small></div></div>${stale.length ? `<div class="notice">${t("У")} ${stale.length} ${t("товаров остатки старше 7 дней или отсутствуют. Расход после проверки не вычитается. Обновите отметки перед закупкой.")}</div>` : ''}<div class="toolbar"><h3>${t("Рекомендованный список")}</h3><div class="actions"><button class="btn" id="export-order">↓ ${t("Скачать CSV")}</button><button class="btn" id="copy-order">${t("Копировать список")}</button></div></div><div class="table-wrap"><table><thead><tr><th>${t("Товар")}</th><th>${t("Остаток")}</th><th>${t("Расход")}</th><th>${t("Цель с резервом")}</th><th>${t("Заказать")}</th><th></th></tr></thead><tbody>${rows.map(r => `<tr><td class="name"><strong>${esc(r.p.name)}</strong><small>${esc(label(r.p.supplier))} · ${t("шаг")} ${fmt(r.p.step)} ${esc(label(r.p.unit))}</small>${r.warning ? `<small style="color:#a17a31">${esc(t(r.warning))}</small>` : ''}${r.p.rate_source?.includes('Excel') ? t("<small>Приблизительная норма из Excel</small>") : ''}</td><td>${fmt(r.stock)}</td><td>${fmt(r.need)}</td><td>${fmt(r.target)}</td><td><input class="number" type="number" min="0" step="any" data-qty="${r.p.id}" value="${r.orderQty ?? ''}" placeholder="—" aria-label="${t("Заказать")} ${esc(r.p.name)}"> ${esc(label(r.p.unit))}</td><td><button class="text-link" data-edit="${r.p.id}">${t("Настроить")}</button></td></tr>`).join('')}</tbody></table></div><details class="panel"><summary>${t("Как считается заказ")}</summary><p class="help-text">${t("Расход")} = ${t("норма × человеко-дни. Цель")} = ${t("расход × (1 + резерв), с ограничением лимита запаса, если он задан. Заказ")} = max(0, ${t("цель − оценка остатка), округлённый вверх до шага упаковки. Уровень остатка заменяется количеством из настроек товара. При неизвестной норме или остатке автоматическая рекомендация отсутствует; количество можно ввести вручную. Лимит не гарантирует срок годности — проверяйте партии отдельно.")}</p></details><div class="section-head"><h2>${t("Сохранённые списки")}</h2></div><div class="table-wrap"><table><thead><tr><th>${t("Создан")}</th><th>${t("Посещения")}</th><th>${t("Позиций")}</th><th>${t("Список")}</th></tr></thead><tbody>${state.orders.filter(o => o.office === selectedOffice).map(o => `<tr><td>${date(o.created_at.slice(0, 10))}</td><td>${o.source==='trial_proposal'?t('На пробу'):fmt(o.visits)}</td><td>${o.lines.length}</td><td><button class="text-link" data-saved-order="${o.id}">${t("Открыть")}</button></td></tr>`).join('') || t("<tr><td colspan=\"4\" class=\"muted\">Пока нет сохранённых списков. Список не меняет остатки — поставку вносят после получения.</td></tr>")}</tbody></table></div>`;
+  renderProposals();
   ['visits', 'buffer'].forEach(id => $('#' + id).onchange = e => {
     if (!e.target.checkValidity()) return e.target.reportValidity();
     if (id === 'visits') visits = Number(e.target.value);else buffer = Number(e.target.value) / 100;
@@ -396,12 +408,18 @@ function orderView() {
   };
   $$('[data-saved-order]').forEach(b => b.onclick = () => {
     const o = state.orders.find(o => o.id === Number(b.dataset.savedOrder));
-    modal(t("Список закупки"), `<p class="muted">${esc(o.office)} · ${fmt(o.visits)} ${t("человеко-дней")}</p><div class="table-wrap" style="margin-top:15px"><table>${o.lines.map(l => `<tr><td class="name">${esc(l.name)}<small>${esc(l.supplier)}</small></td><td>${fmt(l.qty)} ${esc(label(l.unit))}</td></tr>`).join('')}</table></div><button class="btn" id="saved-csv" type="button">${t("Скачать CSV")}</button>`);
+    modal(t("Список закупки"), `<p class="muted">${esc(o.office)} · ${o.source==='trial_proposal'?t('На пробу'):fmt(o.visits)+' '+t("человеко-дней")}</p><div class="table-wrap" style="margin-top:15px"><table>${o.lines.map(l => `<tr><td class="name">${esc(l.name)}<small>${esc(l.supplier)}</small></td><td>${fmt(l.qty)} ${esc(label(l.unit))}</td></tr>`).join('')}</table></div><button class="btn" id="saved-csv" type="button">${t("Скачать CSV")}</button>`);
     $('#saved-csv').onclick = () => exportOrder(o.lines.map(l => ({
       p: l,
       orderQty: l.qty
     })), o.office);
   });
+}
+function renderProposals(){
+ const pending=state.proposals.filter(r=>r.office===selectedOffice&&r.status==='pending');
+ const el=document.createElement('section');el.className='panel trial-proposals';el.innerHTML=`<h3>${t('Предложения на пробу')} · ${pending.length}</h3><p class="help-text">${t('Одобрение создаёт отдельный список закупки. В кладовую товар попадёт после поступления.')}</p>${pending.map(r=>{const p=state.products.find(p=>p.id===r.product_id);return `<div class="proposal-row"><div><strong>${esc(p?.name)}</strong><p class="tiny muted">${esc(r.note)}</p></div><div class="actions"><button class="btn small primary" data-decide="${r.id}">${t('Одобрить')}</button><button class="btn small" data-reject="${r.id}">${t('Отклонить')}</button></div></div>`}).join('')}`;
+ $('.pagehead')?.after(el);if(!el.isConnected)$('#content').prepend(el);
+ $$('[data-decide],[data-reject]').forEach(b=>b.onclick=()=>{const approving=Boolean(b.dataset.decide),id=Number(b.dataset.decide||b.dataset.reject),r=state.proposals.find(r=>r.id===id),p=state.products.find(p=>p.id===r.product_id);modal(t(approving?'Одобрить пробную закупку':'Отклонить предложение'),`<h3>${esc(p.name)}</h3>${approving?field(t('Количество для пробы'),'qty',p.step||1,'number','min="0.001" step="any" required'):''}${field(t('Примечание'),'note')}${foot()}`,async f=>{await api('proposals/decide',{id,decision:approving?'approve':'reject',qty:f.get('qty'),note:f.get('note')});notify(t(approving?'Пробная закупка сохранена':'Предложение отклонено'))});cancel()});
 }
 function exportOrder(rows, o = selectedOffice) {
   const cell = x => '"' + String(x ?? '').replaceAll('"', '""').replace(/^[=+@-]/, "'$&") + '"';
@@ -648,5 +666,16 @@ function selectCatalogue(item){
 }
 async function exporterModal(){
  try{const r=await fetch('/supplier-exporter.js');if(!r.ok)throw Error(t('Ошибка запроса'));const code=await r.text();modal(t('Выгрузить из магазина'),`<p class="help-text">${t('Добавьте эту ссылку в закладки и нажмите её на странице магазина. Выгрузятся товары, доступные в разметке текущей страницы; другие страницы выгружаются отдельно. Пароли и cookies не передаются.')}</p><p style="margin:20px 0"><a id="export-bookmark" class="btn primary">${t('Экспортировать товары')}</a></p><p class="help-text">${t('Это справочник, а не полная синхронизация магазина. Цены и наличие относятся к моменту выгрузки.')}</p><details><summary>JavaScript</summary><textarea readonly id="export-code" style="width:100%;height:130px"></textarea></details><button class="btn" id="copy-export" type="button">${t('Скопировать код')}</button>`);$('#export-code').value=code;$('#export-bookmark').href='javascript:'+encodeURIComponent(code);$('#export-bookmark').onclick=e=>{e.preventDefault();notify(t('Добавьте эту ссылку в закладки и нажмите её на странице магазина. Выгрузятся товары, доступные в разметке текущей страницы; другие страницы выгружаются отдельно. Пароли и cookies не передаются.'))};$('#copy-export').onclick=async()=>{try{await navigator.clipboard.writeText(code);notify(t('Код скопирован'))}catch{$('#export-code').focus();$('#export-code').select()}};
+ }catch(e){notify(e.message,true)}
+}
+
+async function photoPicker(pid,query=null,page=1){
+ const p=state.products.find(p=>p.id===pid);if(!p)return;
+ if(query===null)query=p.name.split(/\s+/)[0];
+ try{
+  const data=await api('photo-candidates?'+new URLSearchParams({product_id:pid,q:query,page}));
+  modal(t('Фото для карточки'),`<h3>${esc(p.name)}</h3><div class="notice info">${t('Меняется только фото. Название, артикул, остатки и история сохранятся. Для сгруппированной позиции фото одного варианта служит иллюстрацией.')}</div><label class="field"><span>${t('Поиск в каталоге поставщика')}</span><input id="photo-search" value="${esc(query)}" type="search"></label><div class="photo-candidates">${data.rows.map(r=>`<article class="photo-candidate"><div class="candidate-image">${photo(r)}</div><p>${esc(r.name)}</p><small class="muted">${esc(r.sku)}</small><button type="button" class="btn small" data-choose-photo="${r.source_type}:${r.id}" ${r.photo_status==='missing'?'disabled':''}>${t('Использовать это фото')}</button></article>`).join('')||`<p class="help-text">${t('Фото не найдены. Измените поиск или загрузите фото в редакторе товара.')}</p>`}</div><div class="actions"><button type="button" class="btn small" id="photo-prev" ${page<=1?'disabled':''}>${t('Предыдущая')}</button><span>${page} · ${data.total}</span><button type="button" class="btn small" id="photo-next" ${page*24>=data.total?'disabled':''}>${t('Следующая')}</button></div>`);
+  $('#photo-search').onchange=e=>photoPicker(pid,e.target.value);$('#photo-prev').onclick=()=>photoPicker(pid,query,page-1);$('#photo-next').onclick=()=>photoPicker(pid,query,page+1);
+  $$('[data-choose-photo]').forEach(button=>button.onclick=async()=>{button.disabled=true;try{const [source_type,source_id]=button.dataset.choosePhoto.split(':');await api('product-photo',{product_id:pid,source_type,source_id:Number(source_id)});$('#modal').close();await refresh();notify(t('Фотография обновлена. Остатки сохранены.'))}catch(e){button.disabled=false;notify(e.message,true)}});bindPhotoErrors();
  }catch(e){notify(e.message,true)}
 }

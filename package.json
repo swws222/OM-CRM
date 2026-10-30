@@ -8,7 +8,8 @@
     "test": "python3 -m unittest discover -s tests -v && node tests/model.test.js && node tests/i18n.test.js && node tests/catalog-batch.test.js && node tests/product-filters.test.js",
     "test:browser": "node tests/browser.mjs",
     "test:bulk-browser": "node tests/bulk-browser.mjs",
-    "test:product-lists-browser": "node tests/product-lists-browser.mjs"
+    "test:product-lists-browser": "node tests/product-lists-browser.mjs",
+    "test:purchasing-browser": "node tests/purchasing-browser.mjs"
   },
   "devDependencies": {
     "@babel/parser": "7.28.5",
