@@ -15,6 +15,7 @@ from zoneinfo import ZoneInfo
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 import catalog
+import taxonomy
 
 ROOT = Path(__file__).resolve().parent
 DATA = Path(os.environ.get('PANTRY_DATA_DIR', ROOT / '.runtime'))
@@ -83,10 +84,20 @@ def init():
                 c.execute('INSERT INTO attendance VALUES(?,?,?,?)',(a['office'],a['date'],a['count'],a['notes']))
             c.execute("INSERT INTO meta VALUES('seeded','1')")
         names=json.loads((ROOT/'data/serbian_names.json').read_text())
+        observed={r[0] for r in c.execute('SELECT DISTINCT product_id FROM observations')}
+        received=set()
+        for row in c.execute('SELECT data FROM deliveries'):
+            received.update(l['product_id'] for l in json.loads(row[0])['lines'])
         for r in c.execute('SELECT id,data FROM products').fetchall():
-            p=json.loads(r['data'])
+            p=json.loads(r['data']);old=p.copy()
             if p['name'] in names and 'name_status' not in p:
-                old=p.copy();p['legacy_name']=p['name'];p['name']=names[p['name']];p['name_status']='provisional'
+                p['legacy_name']=p['name'];p['name']=names[p['name']];p['name_status']='provisional'
+            if 'in_pantry' not in p:p['in_pantry']=r['id'] in observed or r['id'] in received
+            if 'favorite' not in p:p['favorite']=False
+            p['supplier']=taxonomy.canonical_supplier(p['supplier'])
+            if p.get('category_source')!='manual' and (p.get('catalog_id') or p.get('name_status') in ('supplier_import','provisional')):
+                p.update(taxonomy.category_fields(p['name'],p.get('category'),p.get('category_source')))
+            if p!=old:
                 c.execute('UPDATE products SET data=? WHERE id=?',(json.dumps(p,ensure_ascii=False),r['id']))
                 log(c,'migrate','product',r['id'],old,p)
         for r in c.execute('SELECT id,data FROM deliveries').fetchall():
@@ -105,7 +116,7 @@ def state(c):
             qty=p['thresholds'][latest['level']] if latest['kind']=='level' else latest['qty']
             qty+=sum(line['qty'] for d in deliveries if d['office']==p['office'] and latest['date']<d['date'] for line in d['lines'] if line['product_id']==p['id'])
         p['observation']=latest; p['estimated_stock']=qty
-    return dict(products=products,observations=observations,deliveries=deliveries,attendance=[dict(r) for r in c.execute('SELECT * FROM attendance ORDER BY date DESC')],orders=[dict(json.loads(r['data']),id=r['id'],created_at=r['created_at']) for r in c.execute('SELECT * FROM orders ORDER BY id DESC')],offices=OFFICES,levels=LEVELS)
+    return dict(products=products,observations=observations,deliveries=deliveries,attendance=[dict(r) for r in c.execute('SELECT * FROM attendance ORDER BY date DESC')],orders=[dict(json.loads(r['data']),id=r['id'],created_at=r['created_at']) for r in c.execute('SELECT * FROM orders ORDER BY id DESC')],offices=OFFICES,levels=LEVELS,categories=taxonomy.CATEGORIES,suppliers=taxonomy.SUPPLIERS)
 
 def calibration(s,pid):
     p=next(p for p in s['products'] if p['id']==pid)
@@ -136,6 +147,12 @@ def save_product(c,b,id=None):
     for k in ('name','supplier','category','unit'):
         if not isinstance(p[k],str) or not p[k].strip(): raise ValueError(f'Заполните поле {k}')
         p[k]=p[k].strip()[:250]
+    p['supplier']=taxonomy.canonical_supplier(p['supplier'])
+    p['favorite']=bool((old or {}).get('favorite',b.get('favorite',False)))
+    p['in_pantry']=bool(b.get('in_pantry',(old or {}).get('in_pantry',False)))
+    source=b.get('category_source',(old or {}).get('category_source'))
+    if old and p['category']!=old.get('category'):source='manual'
+    p.update(taxonomy.category_fields(p['name'],p['category'],source))
     p['legacy_name']=(old or {}).get('legacy_name','')
     p['catalog_id']=(old or {}).get('catalog_id')
     p['name_status']=(old or {}).get('name_status','manual')
@@ -173,6 +190,7 @@ def save_observation(c,b):
     level=b.get('level') if kind=='level' else None
     if kind=='level' and (type(level)!=int or level not in range(6)): raise ValueError('Неизвестный уровень')
     id=c.execute('INSERT INTO observations(product_id,date,kind,qty,level,note,created_at) VALUES(?,?,?,?,?,?,?)',(pid,b['date'],kind,qty,level,str(b.get('note',''))[:2000],now())).lastrowid
+    enroll_received_product(c,pid)
     log(c,'create','observation',id,None,b)
     return id
 
@@ -207,8 +225,28 @@ def save_delivery(c,b,id=None):
         if id: c.execute('UPDATE deliveries SET office=?,supplier=?,number=?,date=?,data=? WHERE id=?',(o,supplier_key(supplier),invoice_key(number),date,json.dumps(d,ensure_ascii=False),id))
         else: id=c.execute('INSERT INTO deliveries(office,supplier,number,date,data) VALUES(?,?,?,?,?)',(o,supplier_key(supplier),invoice_key(number),date,json.dumps(d,ensure_ascii=False))).lastrowid
     except sqlite3.IntegrityError: raise ValueError('Документ этого поставщика с таким номером уже есть в офисе')
+    previous_ids={line['product_id'] for line in old['lines']} if old else set()
+    for line in lines:
+        if line['product_id'] not in previous_ids:enroll_received_product(c,line['product_id'])
     log(c,'update' if old else 'create','delivery',id,old,d)
     return id
+
+def enroll_received_product(c,pid):
+    row=c.execute('SELECT data FROM products WHERE id=?',(pid,)).fetchone()
+    if not row:return
+    p=json.loads(row[0])
+    if not p.get('in_pantry'):
+        p['in_pantry']=True;c.execute('UPDATE products SET data=? WHERE id=?',(json.dumps(p,ensure_ascii=False),pid))
+        log(c,'pantry','product',pid,None,{'in_pantry':True,'reason':'observation_or_delivery'})
+
+def product_flags(c,b):
+    pid=int(b['product_id']);row=c.execute('SELECT data FROM products WHERE id=?',(pid,)).fetchone()
+    if not row:raise ValueError('Товар не найден')
+    fields={k:b[k] for k in ('favorite','in_pantry') if k in b}
+    if not fields or any(type(v)!=bool for v in fields.values()):raise ValueError('Флаги должны быть true или false')
+    p=json.loads(row[0]);before={k:bool(p.get(k)) for k in fields};p.update(fields)
+    c.execute('UPDATE products SET data=? WHERE id=?',(json.dumps(p,ensure_ascii=False),pid));log(c,'flags','product',pid,before,fields)
+    return {'product_id':pid,**fields}
 
 def store_image(value):
     if not value or not value.startswith('data:'):return value
@@ -251,7 +289,7 @@ def finish_catalog_import(c,b):
             row=c.execute('SELECT supplier,data FROM supplier_catalog WHERE id=?',(catalog_id,)).fetchone()
             if not row or row['supplier']!=job['supplier']:raise ValueError('Товар справочника не найден')
             item=json.loads(row['data']);old=linked.get(catalog_id)
-            p=old.copy() if old else dict(office=job['office'],category=item['category'],unit=item['unit'],step=1,rate=None,rate_source='Нет истории потребления',price=item['price'],active=True,notes='',thresholds=[0,1,3,6,12,24],max_stock=None,legacy_name='')
+            p=old.copy() if old else dict(office=job['office'],category=item['category'],unit=item['unit'],step=1,rate=None,rate_source='Нет истории потребления',price=item['price'],active=True,notes='',thresholds=[0,1,3,6,12,24],max_stock=None,legacy_name='',favorite=False,in_pantry=False,category_source=item.get('category_source','auto'))
             p.update(name=item['name'],supplier=item['supplier'],supplier_sku=item['sku'],url=item['url'],image=store_image(item.get('image') or p.get('image','')),catalog_id=catalog_id,name_status='supplier_import',archived=False,active=True)
             p.pop('id',None)
             if old:
@@ -366,12 +404,13 @@ class Handler(BaseHTTPRequestHandler):
                         p=json.loads(row['data'])
                         if p['office']!=o:raise ValueError('Товар не относится к офису')
                         if supplier_key(p['supplier'])!=supplier_key(item['supplier']):raise ValueError('The existing product belongs to a different supplier')
-                    else:p=dict(office=o,category=item['category'],unit=item['unit'],step=1,rate=None,rate_source='Нет истории потребления',price=item['price'],active=True,notes='',thresholds=[0,1,3,6,12,24])
+                    else:p=dict(office=o,category=item['category'],unit=item['unit'],step=1,rate=None,rate_source='Нет истории потребления',price=item['price'],active=True,notes='',thresholds=[0,1,3,6,12,24],favorite=False,in_pantry=False,category_source=item.get('category_source','auto'))
                     item['image']=store_image(item.get('image',''))
                     p.update(name=item['name'],supplier=item['supplier'],supplier_sku=item['sku'],url=item['url'],image=item['image'] or p.get('image',''))
                     id=save_product(c,p,int(pid) if pid else None)
                     saved=json.loads(c.execute('SELECT data FROM products WHERE id=?',(id,)).fetchone()[0]);saved.update(catalog_id=int(b['catalog_id']),name_status='supplier_import')
                     c.execute('UPDATE products SET data=? WHERE id=?',(json.dumps(saved,ensure_ascii=False),id));log(c,'link','product',id,None,{'catalog_id':int(b['catalog_id'])});result={'id':id}
+                elif path=='/api/product-flags':result=product_flags(c,b)
                 elif path=='/api/product': result={'id':save_product(c,b,b.get('id'))}
                 elif path=='/api/observation': result={'id':save_observation(c,b)}
                 elif path=='/api/delivery': result={'id':save_delivery(c,b,b.get('id'))}

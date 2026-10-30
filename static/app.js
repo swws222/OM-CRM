@@ -1,3 +1,4 @@
+import {filterProducts,suppliersFor,categoriesFor,supplierName} from './product-filters.js';
 import {importFiles,mergeCatalogRows,importBatches} from './catalog-batch.js';
 import {t, label, locale, getLanguage, setLanguage} from './i18n.js';
 import { recommend } from './model.js';
@@ -31,6 +32,7 @@ const download = (name, content, type = 'text/plain') => {
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 };
 const staffMode = new URLSearchParams(location.search).get('mode') === 'staff';
+document.body.dataset.staff=String(staffMode);
 let state,
   view = staffMode?'stock':(sessionStorage.getItem('pantry_view')||'stock'),
   selectedOffice = localStorage.getItem('office') || 'Белград',
@@ -41,9 +43,12 @@ let state,
   buffer = .5,
   overrides = {},
   toastTimer;
-const nav = [['stock', '▦', t("Остатки")], ['order', '▤', t("План закупки")], ['products', '◇', t("Каталог")], ['deliveries', '▱', t("Поступления")], ['attendance', '▥', t("Посещаемость")]];
+const nav = [['stock', '▦', t("Остатки")],['favorites','♡',t('Избранное')], ['order', '▤', t("План закупки")], ['products', '◇', t("Каталог")], ['deliveries', '▱', t("Поступления")], ['attendance', '▥', t("Посещаемость")]];
 const products = () => state.products.filter(p => p.office === selectedOffice);
-const active = () => products().filter(p => p.active && !p.archived);
+const favoriteProducts=()=>products().filter(p=>p.favorite);
+const active=()=>products().filter(p=>p.in_pantry);
+let supplierFilter='',favoriteOnly=false;
+try{const saved=JSON.parse(sessionStorage.getItem('pantry_filters')||'{}');supplierFilter=saved.supplier||'';category=saved.category||'Все товары';favoriteOnly=Boolean(saved.favorites)}catch{}
 let catalogShowArchived=false;
 function notify(message, error = false) {
   const el = $('#toast');
@@ -97,13 +102,13 @@ function pagehead(eyebrow, title, sub, action = '') {
   return `<div class="pagehead"><div><div class="eyebrow">${eyebrow}</div><h1>${title}</h1><p class="subtitle">${sub}</p></div>${action}</div>`;
 }
 function render() {
-  $('#app').innerHTML = `<div class="layout"><aside class="sidebar"><div class="brand"><span class="brandmark">♧</span><div>office pantry<small>${t("забота об офисе")}</small></div></div><div class="side-label">${t("РАБОЧЕЕ ПРОСТРАНСТВО")}</div><nav class="nav" aria-label="${t("Основная навигация")}">${nav.filter(n => !staffMode || n[0] === 'stock').map(([id, i, n]) => `<button data-nav="${id}" class="${view === id ? 'active' : ''}"><span class="nav-icon">${i}</span>${n}</button>`).join('')}</nav><div class="side-foot"><span class="dot"></span> ${t("Всё в одной кладовой")}<br><span class="tiny">MVP · ${t("данные сохраняются на сервере")}</span><br><a class="text-link tiny" href="?mode=staff">${t("Интерфейс хозяюшки")}</a><br><button class="text-link tiny" id="backup" style="margin-top:12px">${t("Резервная копия")}</button></div></aside><main class="main"><header class="topbar"><span class="breadcrumb">${t("Рабочее пространство")} &nbsp; / &nbsp; ${nav.find(n => n[0] === view)[2]}</span><div class="top-right"><select id="office" aria-label="${t("Офис")}">${state.offices.map(o => `<option value="${esc(o)}" ${o === selectedOffice ? 'selected' : ''}>${esc(label(o))}</option>`).join('')}</select><select id="language" aria-label="Language / Jezik / Язык"><option value="ru">Русский</option><option value="sr">Srpski</option><option value="en">English</option></select><span class="avatar">OP</span></div></header><div class="content" id="content"></div></main></div>`;
+  $('#app').innerHTML = `<div class="layout"><aside class="sidebar"><div class="brand"><span class="brandmark">♧</span><div>office pantry<small>${t("забота об офисе")}</small></div></div><div class="side-label">${t("РАБОЧЕЕ ПРОСТРАНСТВО")}</div><nav class="nav" aria-label="${t("Основная навигация")}">${nav.filter(n => !staffMode || ['stock','favorites'].includes(n[0])).map(([id, i, n]) => `<button data-nav="${id}" class="${view === id ? 'active' : ''}"><span class="nav-icon">${i}</span>${n}${id==='favorites'?`<span class="nav-count">${favoriteProducts().length}</span>`:''}</button>`).join('')}</nav><div class="side-foot"><span class="dot"></span> ${t("Всё в одной кладовой")}<br><span class="tiny">MVP · ${t("данные сохраняются на сервере")}</span><br><a class="text-link tiny" href="?mode=staff">${t("Интерфейс хозяюшки")}</a><br><button class="text-link tiny" id="backup" style="margin-top:12px">${t("Резервная копия")}</button></div></aside><main class="main"><header class="topbar"><span class="breadcrumb">${t("Рабочее пространство")} &nbsp; / &nbsp; ${nav.find(n => n[0] === view)[2]}</span><div class="top-right"><select id="office" aria-label="${t("Офис")}">${state.offices.map(o => `<option value="${esc(o)}" ${o === selectedOffice ? 'selected' : ''}>${esc(label(o))}</option>`).join('')}</select><select id="language" aria-label="Language / Jezik / Язык"><option value="ru">Русский</option><option value="sr">Srpski</option><option value="en">English</option></select><span class="avatar">OP</span></div></header><div class="content" id="content"></div></main></div>`;
   $('#language').value=getLanguage();
   $('#language').onchange=e=>setLanguage(e.target.value);
   $('#office').onchange = e => {
     selectedOffice = e.target.value;
     localStorage.setItem('office', selectedOffice);
-    category = 'Все товары';
+    category = 'Все товары';supplierFilter='';favoriteOnly=false;rememberFilters();
     search = '';
     overrides = {};
     render();
@@ -112,12 +117,12 @@ function render() {
     view = b.dataset.nav;
     sessionStorage.setItem('pantry_view',view);
     search = '';
-    category = 'Все товары';
     render();
   });
   $('#backup').onclick = () => window.location.assign('/api/backup');
   ({
     stock: stockView,
+    favorites:favoritesView,
     products: productsView,
     order: orderView,
     deliveries: deliveriesView,
@@ -127,7 +132,7 @@ function render() {
 function stockView() {
   const ps = active(),
     checked = ps.filter(p => p.observation?.date === today()).length;
-  $('#content').innerHTML = pagehead(t("КЛАДОВАЯ ОФИСА"), t("Всё на своих местах"), t("Отметьте, сколько осталось. О количестве для заказа позаботится система."), `<button class="btn" id="inventory">＋ ${t("Точный остаток")}</button>`) + `<div class="hero"><div><div class="eyebrow">${t("БЫСТРЫЙ ОБХОД")}</div><h2>${t("Хороший день начинается")}<br> ${t("с полной кухни.")}</h2><p>${t("Проверьте весь запас товара в офисе: склад и обе кухни. После сегодняшних поставок выбирайте уровень — он сохранится сразу.")}</p></div><div class="hero-art" aria-hidden="true">🧺</div><div class="progress-info"><strong>${checked}<span class="muted"> / ${ps.length}</span></strong><div class="tiny muted">${t("проверено сегодня")}</div><div class="progress"><i style="width:${ps.length ? checked / ps.length * 100 : 0}%"></i></div></div></div><div class="toolbar"><h3>${t("Что есть в кладовой")} <span class="muted tiny">${ps.length} ${t("позиций")}</span></h3><div class="actions"><label class="checkbox tiny"><input type="checkbox" id="low" ${onlyLow ? 'checked' : ''}>${t("Только мало / нет")}</label><div class="search"><input type="search" id="search" placeholder="⌕  ${t("Найти продукт…")}" value="${esc(search)}" aria-label="${t("Поиск товара")}"></div></div></div><div class="tabs" id="categories"></div><div class="grid" id="cards"></div><p class="footer-note">${t("Иллюстрации условные. Реальные фото можно загрузить в карточке товара. Уровни означают разное количество для каждого товара — их настраивает администратор.")}</p>`;
+  $('#content').innerHTML = pagehead(t("КЛАДОВАЯ ОФИСА"), t("Всё на своих местах"), t("Отметьте, сколько осталось. О количестве для заказа позаботится система."), `<button class="btn" id="inventory">＋ ${t("Точный остаток")}</button>`) + `<div class="hero"><div><div class="eyebrow">${t("БЫСТРЫЙ ОБХОД")}</div><h2>${t("Хороший день начинается")}<br> ${t("с полной кухни.")}</h2><p>${t("Проверьте весь запас товара в офисе: склад и обе кухни. После сегодняшних поставок выбирайте уровень — он сохранится сразу.")}</p></div><div class="hero-art" aria-hidden="true">🧺</div><div class="progress-info"><strong>${checked}<span class="muted"> / ${ps.length}</span></strong><div class="tiny muted">${t("проверено сегодня")}</div><div class="progress"><i style="width:${ps.length ? checked / ps.length * 100 : 0}%"></i></div></div></div><div class="toolbar"><h3>${t("Что есть в кладовой")} <span class="muted tiny">${ps.length} ${t("позиций")}</span></h3><div class="actions"><label class="checkbox tiny"><input type="checkbox" id="low" ${onlyLow ? 'checked' : ''}>${t("Только мало / нет")}</label><div class="search"><input type="search" id="search" placeholder="⌕  ${t("Найти продукт…")}" value="${esc(search)}" aria-label="${t("Поиск товара")}"></div></div></div>${filtersMarkup(ps)}<div class="tabs" id="categories"></div><div class="grid" id="cards"></div><p class="footer-note">${t("Иллюстрации условные. Реальные фото можно загрузить в карточке товара. Уровни означают разное количество для каждого товара — их настраивает администратор.")}</p>`;
   if (staffMode) {
     $('#inventory').remove();
     $('.side-foot').innerHTML = t("<span class=\"dot\"></span>Режим обхода<br><span class=\"tiny\">Отмечайте остатки во всём офисе</span>");
@@ -140,23 +145,55 @@ function stockView() {
     onlyLow = e.target.checked;
     drawCards();
   };
-  const cats = ['Все товары', ...new Set(ps.map(p => p.category))];
-  $('#categories').innerHTML = cats.map(c => `<button class="chip ${category === c ? 'active' : ''}" data-cat="${esc(c)}">${esc(label(c))} <span>${c === 'Все товары' ? ps.length : ps.filter(p => p.category === c).length}</span></button>`).join('');
-  $$('[data-cat]').forEach(b => b.onclick = () => {
-    category = b.dataset.cat;
-    stockView();
-  });
-  drawCards();
+  bindFilters(stockView);drawCategoryTabs(ps,stockView);drawCards();
+}
+function rememberFilters(){sessionStorage.setItem('pantry_filters',JSON.stringify({supplier:supplierFilter,category,favorites:favoriteOnly}))}
+function filtersMarkup(ps){
+ const suppliers=suppliersFor(products(),state.suppliers||[]),categories=categoriesFor(products(),state.categories||[]);
+ if(supplierFilter&&!suppliers.includes(supplierFilter))suppliers.push(supplierFilter);if(category!=='Все товары'&&!categories.includes(category))categories.push(category);
+ return `<div class="product-filters"><label class="field"><span>${t('Поставщик')}</span><select id="supplier-filter"><option value="">${t('Все поставщики')}</option>${suppliers.map(v=>`<option value="${esc(v)}" ${supplierFilter===v?'selected':''}>${esc(label(v))}</option>`).join('')}</select></label><label class="field"><span>${t('Категория')}</span><select id="category-filter"><option value="Все товары">${t('Все категории')}</option>${categories.map(v=>`<option value="${esc(v)}" ${category===v?'selected':''}>${esc(label(v))}</option>`).join('')}</select></label><label class="checkbox"><input type="checkbox" id="favorite-filter" ${favoriteOnly||view==='favorites'?'checked':''} ${view==='favorites'?'disabled':''}>♡ ${t('Только избранное')}</label><button type="button" class="btn small" id="reset-product-filters">${t('Сбросить фильтры')}</button><span class="tiny muted" id="filter-count"></span></div>`;
+}
+function bindFilters(redraw){
+ $('#supplier-filter').onchange=e=>{supplierFilter=e.target.value;rememberFilters();redraw()};
+ $('#category-filter').onchange=e=>{category=e.target.value;rememberFilters();redraw()};
+ $('#favorite-filter').onchange=e=>{favoriteOnly=e.target.checked;rememberFilters();redraw()};
+ $('#reset-product-filters').onclick=()=>{supplierFilter='';category='Все товары';favoriteOnly=false;search='';onlyLow=false;rememberFilters();redraw()};
+}
+function selectedProducts(ps,extra={}){return filterProducts(ps,{supplier:supplierFilter,category,search,favorites:favoriteOnly||view==='favorites',...extra})}
+function drawCategoryTabs(ps,redraw){
+ const subset=filterProducts(ps,{supplier:supplierFilter,favorites:favoriteOnly||view==='favorites'});
+ const cats=['Все товары',...new Set(subset.map(p=>p.category))];if(!cats.includes(category))cats.push(category);
+ $('#categories').innerHTML=cats.map(c=>`<button class="chip ${category===c?'active':''}" data-cat="${esc(c)}">${esc(label(c))} <span>${c==='Все товары'?subset.length:subset.filter(p=>p.category===c).length}</span></button>`).join('');
+ $$('[data-cat]').forEach(b=>b.onclick=()=>{category=b.dataset.cat;rememberFilters();redraw()});
+}
+function favoritesView(){
+ const ps=favoriteProducts();
+ $('#content').innerHTML=pagehead(t('ВАШ ВЫБОР'),t('Избранное'),t('Любимые товары для быстрого поиска. Сердечко не добавляет товар в кладовую.'))+`<div class="toolbar"><span class="muted">${ps.length} ${t('позиций')}</span><input id="search" type="search" placeholder="${t('Найти продукт…')}" value="${esc(search)}" aria-label="${t('Поиск товара')}"></div>${filtersMarkup(ps)}<div class="tabs" id="categories"></div><div class="grid" id="cards"></div>`;
+ $('#search').oninput=e=>{search=e.target.value;drawCards()};bindFilters(favoritesView);drawCategoryTabs(ps,favoritesView);drawCards();
+}
+function favoriteButton(p,table=false){return `<button type="button" class="favorite-button ${table?'in-table':''} ${p.favorite?'selected':''}" data-favorite="${p.id}" aria-pressed="${Boolean(p.favorite)}" aria-label="${t(p.favorite?'Убрать из избранного':'Добавить в избранное')} ${esc(p.name)}" title="${t(p.favorite?'Убрать из избранного':'Добавить в избранное')}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z"/></svg></button>`}
+function pantryButton(p){return `<button type="button" class="btn small pantry-button" data-pantry="${p.id}">${t(p.in_pantry?'Убрать из кладовой':'Добавить в кладовую')}</button>`}
+function redrawProducts(){if(view==='products')productsView();else if(view==='favorites')favoritesView();else stockView()}
+function bindProductFlags(){
+ $$('[data-favorite],[data-pantry]').forEach(button=>button.onclick=async()=>{
+  const field=button.dataset.favorite?'favorite':'in_pantry',id=Number(button.dataset.favorite||button.dataset.pantry),p=state.products.find(p=>p.id===id);button.disabled=true;
+  try{const result=await api('product-flags',{product_id:id,[field]:!p[field]});p[field]=result[field];redrawProducts();if(field==='favorite')notify(t(p.favorite?'Добавлено в избранное':'Удалено из избранного'));else notify(t(p.in_pantry?'Товар добавлен в кладовую':'Товар убран из обхода. История сохранена.'))}
+  catch(e){button.disabled=false;notify(e.message,true)}
+ });
+ const count=$('[data-nav="favorites"] .nav-count');if(count)count.textContent=favoriteProducts().length;
 }
 function drawCards() {
-  const ps = active().filter(p => (category === 'Все товары' || category === p.category) && [p.name,p.legacy_name,p.supplier_sku].some(v=>String(v||'').toLowerCase().includes(search.toLowerCase())) && (!onlyLow || p.observation?.kind === 'level' && p.observation.level <= 2));
+  const base=view==='favorites'?favoriteProducts():active();
+  const ps=selectedProducts(base,{low:view==='stock'&&onlyLow});$('#filter-count').textContent=`${t('Показано')}: ${ps.length} / ${base.length}`;
   $('#cards').innerHTML = ps.length ? ps.map(p => `<article class="product"><div class="product-img" style="background:${{
     'Напитки': '#eef0e9',
     'Молочные': '#eff0ec',
     'Фрукты и овощи': '#f1efe2',
     'Перекусы': '#efebe6',
     'Снеки': '#eee9e1'
-  }[p.category] || '#f1f2ec'}">${badge(p)}<button class="edit-icon" data-edit="${p.id}" aria-label="${t("Редактировать")} ${esc(p.name)}">↗</button>${photo(p)}</div><div class="product-body"><div class="product-meta">${esc(label(p.supplier))} · ${esc(label(p.unit))}</div><h3 class="product-name">${esc(p.name)}</h3><div class="level-label"><span>${t("СКОЛЬКО ОСТАЛОСЬ?")}</span><span>${p.observation ? date(p.observation.date).slice(0, 5) : '—'}</span></div><div class="levels">${state.levels.map((l, i) => `<button class="level ${p.observation?.kind === 'level' && p.observation.level === i ? 'selected' : ''}" data-level="${p.id}:${i}" aria-pressed="${p.observation?.kind === 'level' && p.observation.level === i}" title="${t("Оценка для расчёта:")} ${fmt(p.thresholds[i])} ${esc(label(p.unit))}">${esc(label(l))}</button>`).join('')}</div><div class="stock-foot">${p.observation?.kind === 'exact' ? t("Точная инвентаризация") : p.observation?.kind === 'estimate' ? t("Приблизительная оценка") : p.observation ? t("Отметка уровня") : t("Остаток не указан")} · ${p.rate == null ? t("Норма пока не задана") : t("Весь офис")}</div></div></article>`).join('') : t("<div class=\"empty full\"><h2>Здесь пока пусто</h2><p>Добавьте товары в каталоге или измените фильтр.</p></div>");
+  }[p.category] || '#f1f2ec'}">${badge(p)}${favoriteButton(p)}<button class="edit-icon" data-edit="${p.id}" aria-label="${t("Редактировать")} ${esc(p.name)}">↗</button>${photo(p)}</div><div class="product-body"><div class="product-meta">${esc(label(p.supplier))} · ${esc(label(p.unit))}</div><h3 class="product-name">${esc(p.name)}</h3><div class="category-caption">${esc(label(p.category))}${p.archived?` · ${t('Архив каталога')}`:''}</div>${p.in_pantry?`<div class="level-label"><span>${t("СКОЛЬКО ОСТАЛОСЬ?")}</span><span>${p.observation ? date(p.observation.date).slice(0, 5) : '—'}</span></div><div class="levels">${state.levels.map((l, i) => `<button class="level ${p.observation?.kind === 'level' && p.observation.level === i ? 'selected' : ''}" data-level="${p.id}:${i}" aria-pressed="${p.observation?.kind === 'level' && p.observation.level === i}" title="${t("Оценка для расчёта:")} ${fmt(p.thresholds[i])} ${esc(label(p.unit))}">${esc(label(l))}</button>`).join('')}</div><div class="stock-foot">${p.observation?.kind === 'exact' ? t("Точная инвентаризация") : p.observation?.kind === 'estimate' ? t("Приблизительная оценка") : p.observation ? t("Отметка уровня") : t("Остаток не указан")} · ${p.rate == null ? t("Норма пока не задана") : t("Весь офис")}</div>`:`<p class="stock-foot">${t(p.archived||!p.active?'Недоступен для заказа':'Есть в ассортименте, ещё не в кладовой')}</p>`}${!staffMode?pantryButton(p):''}</div></article>`).join('') : t("<div class=\"empty full\"><h2>Здесь пока пусто</h2><p>Добавьте товары в каталоге или измените фильтр.</p></div>");
+  if(!ps.length)$('#cards').innerHTML=`<div class="empty full"><h2>${t(view==='favorites'&&favoriteProducts().length===0?'В избранном пока нет товаров':view==='stock'&&base.length===0?'В кладовой пока нет товаров':'По выбранным фильтрам ничего не найдено')}</h2><p>${t(view==='favorites'?'Нажмите сердечко у товара в каталоге или кладовой.':'Добавьте нужные товары из каталога в кладовую или сбросьте фильтры.')}</p></div>`;
+  bindProductFlags();
   if (staffMode) $$('[data-edit]').forEach(b => b.remove());else bindEdit();
   $$('[data-level]').forEach(b => b.onclick = async () => {
     const [id, level] = b.dataset.level.split(':').map(Number);
@@ -169,7 +206,7 @@ function drawCards() {
         level
       });
       await load();
-      stockView();
+      redrawProducts();
       notify(t("Остаток сохранён"));
     } catch (e) {
       notify(e.message, true);
@@ -227,7 +264,7 @@ function productModal(id) {
     thresholds: [0, 1, 3, 6, 12, 24],
     active: true
   };
-  modal(id ? t("Карточка товара") : t("Новый товар"), `<div class="form-grid">${field(t("Название как у поставщика"), 'name', p.name, 'text', 'required')}${field(t("Артикул поставщика"),'supplier_sku',p.supplier_sku)}${field(t("Поставщик"), 'supplier', p.supplier, 'text', 'required')}${field(t("Категория"), 'category', p.category, 'text', 'required')}${field(t("Единица учёта (шт., кг, л)"), 'unit', p.unit, 'text', 'required')}${field(t("Шаг заказа в единицах учёта"), 'step', p.step, 'number', 'min="0.001" step="any" required')}${field(t("Цена за единицу, RSD (неизвестна — пусто)"), 'price', p.price, 'number', 'min="0" step="any"')}${field(t("Норма на человеко-день (неизвестна — пусто)"), 'rate', p.rate, 'number', 'min="0" step="any"')}${field(t("Лимит целевого запаса (необязательно)"), 'max_stock', p.max_stock, 'number', 'min="0" step="any"')}${p.name_status==='provisional'?`<div class="full notice">${t('Название поставщика ещё не сверено. Можно связать товар с оригинальной карточкой через справочник.')}</div>`:''}<div class="full notice info">${t("Норма — расход в единицах товара на одно посещение офиса за день.")} ${esc(label(p.rate_source) || t("Настраивается вручную"))}. ${t("Для скоропортящегося задайте лимит запаса. Сроки партий пока не учитываются.")}</div><div class="full"><h3>${t("Что означает каждый уровень")}</h3><p class="tiny muted" style="margin:5px 0 12px">${t("Представительное количество для расчёта, не границы интервалов. «Нет» всегда 0. Настройки сразу влияют на последнюю отметку уровня.")}</p><div class="thresholds">${state.levels.map((l, i) => field(esc(label(l)), 't' + i, p.thresholds[i], 'number', `step="any" min="0" required ${i === 0 ? 'readonly' : ''}`)).join('')}</div></div>${field(t("Ссылка на товар в магазине"), 'url', p.url, 'url', 'placeholder="https://…"')}${field(t("Ссылка на фото"), 'image', (p.image?.startsWith('data:')||p.image?.startsWith('/assets/')) ? '' : p.image, 'url', 'placeholder="https://…"')}<label class="field full"><span>${t("Или загрузите реальное фото (до 2 МБ)")}</span><input type="file" name="photo" accept="image/png,image/jpeg,image/webp"></label><label class="field full"><span>${t("Примечание")}</span><textarea name="notes">${esc(p.notes)}</textarea></label>${p.archived?`<label class="checkbox full"><input type="checkbox" name="restore">${t('Восстановить из архива')}</label>`:''}<label class="checkbox full"><input type="checkbox" name="active" ${p.active ? 'checked' : ''}>${t("Показывать в обходе и плане закупок")}</label></div>${foot()}`, async f => {
+  modal(id ? t("Карточка товара") : t("Новый товар"), `<div class="form-grid">${field(t("Название как у поставщика"), 'name', p.name, 'text', 'required')}${field(t("Артикул поставщика"),'supplier_sku',p.supplier_sku)}${field(t("Поставщик"), 'supplier', p.supplier, 'text', 'required list="supplier-options"')}<datalist id="supplier-options">${suppliersFor(products(),state.suppliers||[]).map(v=>`<option value="${esc(v)}">`).join('')}</datalist><label class="field"><span>${t('Категория')}</span><select name="category" id="edit-category">${categoriesFor(products(),state.categories||[]).map(c=>`<option value="${esc(c)}" ${p.category===c?'selected':''}>${esc(label(c))}</option>`).join('')}<option value="__new__">${t('Своя категория…')}</option></select>${p.category_source==='auto'?`<small>${t('Категория подобрана автоматически. Можно изменить.')}</small>`:''}</label><label class="field" id="new-category-field" hidden><span>${t('Название новой категории')}</span><input name="custom_category" id="custom-category" maxlength="150"></label>${field(t("Единица учёта (шт., кг, л)"), 'unit', p.unit, 'text', 'required')}${field(t("Шаг заказа в единицах учёта"), 'step', p.step, 'number', 'min="0.001" step="any" required')}${field(t("Цена за единицу, RSD (неизвестна — пусто)"), 'price', p.price, 'number', 'min="0" step="any"')}${field(t("Норма на человеко-день (неизвестна — пусто)"), 'rate', p.rate, 'number', 'min="0" step="any"')}${field(t("Лимит целевого запаса (необязательно)"), 'max_stock', p.max_stock, 'number', 'min="0" step="any"')}${p.name_status==='provisional'?`<div class="full notice">${t('Название поставщика ещё не сверено. Можно связать товар с оригинальной карточкой через справочник.')}</div>`:''}<div class="full notice info">${t("Норма — расход в единицах товара на одно посещение офиса за день.")} ${esc(label(p.rate_source) || t("Настраивается вручную"))}. ${t("Для скоропортящегося задайте лимит запаса. Сроки партий пока не учитываются.")}</div><div class="full"><h3>${t("Что означает каждый уровень")}</h3><p class="tiny muted" style="margin:5px 0 12px">${t("Представительное количество для расчёта, не границы интервалов. «Нет» всегда 0. Настройки сразу влияют на последнюю отметку уровня.")}</p><div class="thresholds">${state.levels.map((l, i) => field(esc(label(l)), 't' + i, p.thresholds[i], 'number', `step="any" min="0" required ${i === 0 ? 'readonly' : ''}`)).join('')}</div></div>${field(t("Ссылка на товар в магазине"), 'url', p.url, 'url', 'placeholder="https://…"')}${field(t("Ссылка на фото"), 'image', (p.image?.startsWith('data:')||p.image?.startsWith('/assets/')) ? '' : p.image, 'url', 'placeholder="https://…"')}<label class="field full"><span>${t("Или загрузите реальное фото (до 2 МБ)")}</span><input type="file" name="photo" accept="image/png,image/jpeg,image/webp"></label><label class="field full"><span>${t("Примечание")}</span><textarea name="notes">${esc(p.notes)}</textarea></label>${p.archived?`<label class="checkbox full"><input type="checkbox" name="restore">${t('Восстановить из архива')}</label>`:''}<label class="checkbox full"><input type="checkbox" name="active" ${p.active ? 'checked' : ''}>${t('Доступен для заказа')}</label><label class="checkbox full"><input type="checkbox" name="in_pantry" ${p.in_pantry?'checked':''}>${t('Учитывать в кладовой')}</label></div>${foot()}`, async f => {
     let image = f.get('image');
     const file = f.get('photo');
     if (file?.size) {
@@ -239,6 +276,9 @@ function productModal(id) {
       ...p,
       ...Object.fromEntries(f),
       id,
+      category:f.get('category')==='__new__'?String(f.get('custom_category')).trim():f.get('category'),
+      category_source:'manual',
+      in_pantry:f.has('in_pantry'),
       active: f.has('active'),
       archived: Boolean(p.archived)&&!f.has('restore'),
       image,
@@ -246,7 +286,7 @@ function productModal(id) {
     });
     notify(t("Карточка сохранена"));
   });
-  cancel();
+  cancel();$('#edit-category').onchange=e=>{const custom=e.target.value==='__new__';$('#new-category-field').hidden=!custom;$('#custom-category').required=custom};
 }
 function dataURL(file) {
   return new Promise((resolve, reject) => {
@@ -265,8 +305,9 @@ function observationModal(pid) {
   cancel();
 }
 function productsView() {
-  const ps = products().filter(p=>Boolean(p.archived)===catalogShowArchived).filter(p => [p.name,p.legacy_name,p.supplier_sku].some(v=>String(v||'').toLowerCase().includes(search.toLowerCase())));
-  $('#content').innerHTML = pagehead(t("НАСТРОЙКИ КЛАДОВОЙ"), t("Каталог товаров"), t("Названия, фотографии, нормы и значения уровней — всё можно изменить."), `<button class="btn primary" id="add-product">＋ ${t("Добавить товар")}</button>`) + `<div class="toolbar"><input type="search" id="catalog-search" placeholder="⌕  ${t("Поиск по каталогу")}" value="${esc(search)}"><button class="btn" id="exact">${t("Точная инвентаризация")}</button><label class="checkbox tiny"><input type="checkbox" id="show-archived" ${catalogShowArchived?'checked':''}>${t('Архив')}</label></div><div class="table-wrap"><table><thead><tr><th>${t("Товар")}</th><th>${t("Поставщик")}</th><th>${t("Норма / чел.-день")}</th><th>${t("Остаток")}*</th><th>${t("Настройки")}</th></tr></thead><tbody>${ps.map(p => `<tr><td class="name"><strong>${esc(p.name)}</strong>${p.name_status==='provisional'?`<span class="badge warn">${t('Название не сверено')}</span>`:''}<small>${esc(p.supplier_sku||'')} · ${esc(label(p.category))} · ${esc(label(p.unit))} ${p.active ? '' : t("· скрыт")}</small></td><td>${esc(label(p.supplier))}</td><td>${fmt(p.rate)}<div class="tiny muted">${p.rate == null ? t("Нужно настроить") : esc(label(p.rate_source))}</div></td><td>${fmt(p.estimated_stock)}<div class="tiny muted">${date(p.observation?.date)}</div></td><td><div class="actions"><button class="btn small" data-edit="${p.id}">${t("Изменить")}</button><button class="btn small" data-calibrate="${p.id}">${t("Калибровка")}</button></div></td></tr>`).join('')}</tbody></table></div><p class="footer-note">* ${t("Последний остаток + поступления после даты проверки. Расход после проверки не вычитается: обновляйте отметки перед расчётом заказа.")}</p>`;
+  const base=products().filter(p=>Boolean(p.archived)===catalogShowArchived);const ps=selectedProducts(base);
+  $('#content').innerHTML = pagehead(t("НАСТРОЙКИ КЛАДОВОЙ"), t('Каталог для заказа'),t('Ассортимент поставщиков. Добавляйте нужные товары в кладовую и избранное.'), `<button class="btn primary" id="add-product">＋ ${t("Добавить товар")}</button>`) + `<div class="toolbar"><input type="search" id="catalog-search" placeholder="⌕  ${t("Поиск по каталогу")}" value="${esc(search)}"><button class="btn" id="exact">${t("Точная инвентаризация")}</button><label class="checkbox tiny"><input type="checkbox" id="show-archived" ${catalogShowArchived?'checked':''}>${t('Архив')}</label></div>${filtersMarkup(base)}<div class="table-wrap"><table><thead><tr><th>${t("Товар")}</th><th>${t("Поставщик")}</th><th>${t("Норма / чел.-день")}</th><th>${t("Остаток")}*</th><th>${t("Настройки")}</th></tr></thead><tbody>${ps.map(p => `<tr><td class="name"><div class="catalog-name">${favoriteButton(p,true)}<strong>${esc(p.name)}</strong></div>${p.name_status==='provisional'?`<span class="badge warn">${t('Название не сверено')}</span>`:''}<small>${esc(p.supplier_sku||'')} · ${esc(label(p.category))} · ${esc(label(p.unit))} ${p.active ? '' : t('· недоступен для заказа')}</small></td><td>${esc(label(p.supplier))}</td><td>${fmt(p.rate)}<div class="tiny muted">${p.rate == null ? t("Нужно настроить") : esc(label(p.rate_source))}</div></td><td>${fmt(p.estimated_stock)}<div class="tiny muted">${date(p.observation?.date)}</div></td><td><div class="actions"><button class="btn small" data-edit="${p.id}">${t("Изменить")}</button><button class="btn small" data-calibrate="${p.id}">${t("Калибровка")}</button>${pantryButton(p)}</div></td></tr>`).join('')}</tbody></table></div><p class="footer-note">* ${t("Последний остаток + поступления после даты проверки. Расход после проверки не вычитается: обновляйте отметки перед расчётом заказа.")}</p>`;
+  bindFilters(productsView);$('#filter-count').textContent=`${t('Показано')}: ${ps.length} / ${base.length}`;bindProductFlags();
   $('#show-archived').onchange=e=>{catalogShowArchived=e.target.checked;productsView()};
   $('#add-product').onclick = () => productModal();
   $('#exact').onclick = () => observationModal();
@@ -299,7 +340,7 @@ async function calibrationModal(pid) {
   }
 }
 function rowsForOrder() {
-  return active().map(p => {
+  return active().filter(p=>p.active&&!p.archived).map(p => {
     const r = recommend(p, visits, buffer);
     return {
       p,

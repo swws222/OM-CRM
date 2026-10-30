@@ -1,3 +1,4 @@
+import {waitForServer} from './browser-ready.mjs';
 import {chromium} from 'playwright';
 import {spawn} from 'node:child_process';
 import {mkdtemp,rm} from 'node:fs/promises';
@@ -7,7 +8,7 @@ const dir=await mkdtemp(tmpdir()+'/pantry-bulk-');
 const proc=spawn('python3',['server.py'],{env:{...process.env,PANTRY_DATA_DIR:dir,PORT:'8125'},stdio:'pipe'});
 let browser;
 try{
- for(let i=0;i<60;i++){try{if((await fetch('http://127.0.0.1:8125/api/state')).ok)break}catch{}await new Promise(r=>setTimeout(r,100))}
+ await waitForServer('http://127.0.0.1:8125/api/state');
  browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox']});
  const page=await browser.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.goto('http://127.0.0.1:8125');await page.waitForSelector('.product');
@@ -31,10 +32,12 @@ try{
  assert.ok(current.every(p=>p.image.startsWith('/assets/catalog/')));
  assert.equal(await page.locator('#content tbody tr').count(),725);
  await page.click('#show-archived');assert.equal(await page.locator('#content tbody tr').count(),35);await page.click('#show-archived');
- await page.click('[data-nav="stock"]');await page.waitForSelector('.product img');assert.equal(await page.locator('.product').count(),725);
+ assert.ok(current.every(p=>!p.in_pantry));
+ await page.locator('#content [data-pantry]').first().click();await page.waitForFunction(()=>document.querySelector('#content [data-pantry]')?.textContent.includes('Убрать'));
+ await page.click('[data-nav="stock"]');await page.waitForSelector('.product img');assert.equal(await page.locator('.product').count(),36);
  await page.locator('.product img').first().scrollIntoViewIfNeeded();await page.waitForFunction(()=>{const image=document.querySelector('.product img');return image?.complete&&image.naturalWidth>0});
  // Editing a product with a locally stored photo must not fail URL form validation.
- await page.locator('[data-edit]').first().click();assert.equal(await page.locator('[name="image"]').inputValue(),'');assert.equal(await page.locator('#modal-form').evaluate(form=>form.checkValidity()),true);await page.locator('.close').click();
+ await page.locator('.product:has(img) [data-edit]').first().click();assert.equal(await page.locator('[name="image"]').inputValue(),'');assert.equal(await page.locator('#modal-form').evaluate(form=>form.checkValidity()),true);await page.locator('.close').click();
  assert.deepEqual(errors,[]);
  console.log('Bulk browser passed: 74 files + report, 725 products, retry, atomic replacement, archived history, visible local photos.');
 }finally{if(browser)await browser.close();proc.kill();await rm(dir,{recursive:true,force:true})}

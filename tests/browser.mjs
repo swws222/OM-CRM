@@ -1,3 +1,4 @@
+import {waitForServer} from './browser-ready.mjs';
 import {chromium} from 'playwright';
 import {spawn} from 'node:child_process';
 import {mkdtemp,rm,mkdir,readFile} from 'node:fs/promises';
@@ -7,7 +8,7 @@ const dir=await mkdtemp(tmpdir()+'/pantry-browser-');
 const proc=spawn('python3',['server.py'],{env:{...process.env,PANTRY_DATA_DIR:dir,PORT:'8123'},stdio:'pipe'});
 let browser;
 try{
- for(let i=0;i<60;i++){try{if((await fetch('http://127.0.0.1:8123/api/state')).ok)break}catch{}await new Promise(r=>setTimeout(r,100))}
+ await waitForServer('http://127.0.0.1:8123/api/state');
  browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox']});
  const page=await browser.newPage({viewport:{width:1440,height:1000}});const errors=[];page.on('pageerror',e=>{errors.push(e.message);console.error('Browser error:',e.message)});
  await page.goto('http://127.0.0.1:8123');await page.waitForSelector('.product');assert.equal(await page.locator('.product').count(),35);
@@ -23,7 +24,7 @@ try{
  await page.locator('#office').selectOption('Нови-Сад');await page.getByRole('button',{name:'Остатки',exact:false}).click();assert.equal(await page.locator('.product').count(),0);
  await page.locator('#office').selectOption('Белград');await page.setViewportSize({width:390,height:844});await page.waitForSelector('.product');
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),true);await page.screenshot({path:'.runtime/screenshots/mobile.png',fullPage:false});
- await page.goto('http://127.0.0.1:8123/?mode=staff');await page.waitForSelector('.product');assert.equal(await page.locator('[data-nav]').count(),1);assert.equal(await page.locator('[data-edit]').count(),0);assert.equal(await page.locator('#inventory').count(),0);
+ await page.goto('http://127.0.0.1:8123/?mode=staff');await page.waitForSelector('.product');assert.equal(await page.locator('[data-nav]').count(),2);assert.equal(await page.locator('[data-edit]').count(),0);assert.equal(await page.locator('#inventory').count(),0);
 
  // Language choice persists, Serbian names do not change with UI language.
  for(const [lang,stockText] of [['sr','Zalihe'],['en','Stock'],['ru','Остатки']]){

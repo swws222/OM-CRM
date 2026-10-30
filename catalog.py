@@ -7,6 +7,7 @@ import io
 import json
 import math
 import re
+import taxonomy
 from urllib.parse import urlparse, urlunparse, urljoin, parse_qsl, urlencode
 
 SUPPLIERS={'Maxi':'https://www.maxi.rs','Moja Pijaca':'https://www.mojapijaca.rs','Coca-Cola':'https://cchbcshop.com'}
@@ -78,7 +79,7 @@ def normalise(row,supplier):
     else:price=None
     unit=str(row.get('unit','kom') or 'kom').strip()[:30]
     key=('sku:'+sku.casefold()) if sku else 'url:'+href
-    return dict(supplier=supplier,name=name,sku=sku,url=href,image=image,price=price,currency='RSD' if price is not None else '',unit=unit,category=str(row.get('category') or 'Прочее')[:150],external_key=key)
+    return dict(supplier=supplier,name=name,sku=sku,url=href,image=image,price=price,currency='RSD' if price is not None else '',unit=unit,external_key=key,**taxonomy.category_fields(name,row.get('category'),row.get('category_source')))
 
 def preview(content,format,supplier):
     if supplier not in SUPPLIERS:raise ValueError('Unknown supplier')
