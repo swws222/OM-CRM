@@ -385,5 +385,6 @@
   "kom": "kom",
   "kg": "kg",
   "Связывайте только тот же товар и ту же единицу учёта. Строку с несколькими вкусами или упаковками нельзя привязать к одному SKU без разделения.": "Povežite samo isti proizvod i istu jedinicu mere. Red sa više ukusa ili pakovanja ne povezujte sa jednom šifrom bez razdvajanja.",
-  "Уточнить": "Proveriti dobavljača"
+  "Уточнить": "Proveriti dobavljača",
+  "Invalid embedded product photo": "Neispravna ugrađena fotografija proizvoda"
 }

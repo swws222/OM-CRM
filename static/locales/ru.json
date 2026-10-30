@@ -18,5 +18,6 @@
   "The existing product belongs to a different supplier": "Выбранный товар относится к другому поставщику",
   "Invalid page": "Некорректный номер страницы",
   "kom": "шт.",
-  "kg": "кг"
+  "kg": "кг",
+  "Invalid embedded product photo": "Некорректная встроенная фотография товара"
 }

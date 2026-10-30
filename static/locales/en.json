@@ -385,5 +385,6 @@
   "kom": "pcs",
   "kg": "kg",
   "Связывайте только тот же товар и ту же единицу учёта. Строку с несколькими вкусами или упаковками нельзя привязать к одному SKU без разделения.": "Link only the same product and stock unit. Split rows containing multiple flavours or pack sizes before linking to a single SKU.",
-  "Уточнить": "Supplier not set"
+  "Уточнить": "Supplier not set",
+  "Invalid embedded product photo": "Invalid embedded product photo"
 }

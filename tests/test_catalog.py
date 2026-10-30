@@ -1,3 +1,4 @@
+import base64
 import json
 import unittest
 import test_http
@@ -19,6 +20,12 @@ class ParseTest(unittest.TestCase):
  def test_empty_and_unstructured_pages_fail_explicitly(self):
   for fmt,content in [('csv',''),('html','<html>no products</html>'),('json','[]')]:
    with self.assertRaises(ValueError):catalog.preview(content,fmt,'Maxi')
+ def test_portable_photos_are_validated(self):
+  image='data:image/png;base64,'+base64.b64encode(b'\x89PNG\r\n\x1a\nfixture').decode()
+  self.assertEqual(catalog.normalise({**PRODUCT,'image':image},'Maxi')['image'],image)
+  for bad in ['data:image/svg+xml;base64,PHN2Zz4=', 'data:image/png;base64,bm90YW5pbWFnZQ==']:
+   with self.assertRaises(ValueError):catalog.normalise({**PRODUCT,'image':bad},'Maxi')
+
  def test_non_rsd_and_embedded_credentials_rejected(self):
   for row in [{**PRODUCT,'currency':'EUR'},{**PRODUCT,'url':'https://user:secret@www.maxi.rs/p/1'}]:
    with self.assertRaises(ValueError):catalog.normalise(row,'Maxi')

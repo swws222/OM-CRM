@@ -1,10 +1,12 @@
 """Supplier catalogue import. No remote requests, code execution, or credential collection."""
+import base64
 import csv
 import hashlib
 from html.parser import HTMLParser
 import io
 import json
 import math
+import re
 from urllib.parse import urlparse, urlunparse, urljoin, parse_qsl, urlencode
 
 SUPPLIERS={'Maxi':'https://www.maxi.rs','Moja Pijaca':'https://www.mojapijaca.rs','Coca-Cola':'https://cchbcshop.com'}
@@ -54,7 +56,14 @@ def normalise(row,supplier):
     image=row.get('image','') or ''
     if isinstance(image,list):image=image[0] if image else ''
     if isinstance(image,dict):image=image.get('url',image.get('contentUrl',''))
-    image=url(image,supplier)
+    if isinstance(image,str) and image.startswith('data:'):
+        match=re.fullmatch(r'data:(image/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)',image)
+        if not match or len(image)>1_400_000:raise ValueError('Invalid embedded product photo')
+        try:raw=base64.b64decode(match[2],validate=True)
+        except ValueError:raise ValueError('Invalid embedded product photo')
+        signatures={'image/png':raw.startswith(b'\x89PNG\r\n\x1a\n'),'image/jpeg':raw.startswith(b'\xff\xd8\xff'),'image/webp':raw.startswith(b'RIFF') and raw[8:12]==b'WEBP'}
+        if not signatures[match[1]]:raise ValueError('Invalid embedded product photo')
+    else:image=url(image,supplier)
     offer=row.get('offers',{})
     if isinstance(offer,list):offer=offer[0] if offer else {}
     if not isinstance(offer,dict):offer={}
