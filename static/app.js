@@ -1,3 +1,4 @@
+import {importFiles,mergeCatalogRows,importBatches} from './catalog-batch.js';
 import {t, label, locale, getLanguage, setLanguage} from './i18n.js';
 import { recommend } from './model.js';
 const $ = s => document.querySelector(s),
@@ -42,7 +43,8 @@ let state,
   toastTimer;
 const nav = [['stock', '▦', t("Остатки")], ['order', '▤', t("План закупки")], ['products', '◇', t("Каталог")], ['deliveries', '▱', t("Поступления")], ['attendance', '▥', t("Посещаемость")]];
 const products = () => state.products.filter(p => p.office === selectedOffice);
-const active = () => products().filter(p => p.active);
+const active = () => products().filter(p => p.active && !p.archived);
+let catalogShowArchived=false;
 function notify(message, error = false) {
   const el = $('#toast');
   el.textContent = t(message);
@@ -188,6 +190,7 @@ function modal(title, body, onSubmit) {
   const d = $('#modal');
   d.innerHTML = `<div class="modal-head"><h2>${title}</h2><button class="close" aria-label="${t("Закрыть")}">×</button></div><form id="modal-form" class="modal-body">${body}</form>`;
   d.querySelector('.close').onclick = () => d.close();
+  d.onclose=()=>{if(!d.open)d.replaceChildren()};
   d.showModal();
   if (onSubmit) $('#modal-form').onsubmit = async e => {
     e.preventDefault();
@@ -224,19 +227,20 @@ function productModal(id) {
     thresholds: [0, 1, 3, 6, 12, 24],
     active: true
   };
-  modal(id ? t("Карточка товара") : t("Новый товар"), `<div class="form-grid">${field(t("Название как у поставщика"), 'name', p.name, 'text', 'required')}${field(t("Артикул поставщика"),'supplier_sku',p.supplier_sku)}${field(t("Поставщик"), 'supplier', p.supplier, 'text', 'required')}${field(t("Категория"), 'category', p.category, 'text', 'required')}${field(t("Единица учёта (шт., кг, л)"), 'unit', p.unit, 'text', 'required')}${field(t("Шаг заказа в единицах учёта"), 'step', p.step, 'number', 'min="0.001" step="any" required')}${field(t("Цена за единицу, RSD (неизвестна — пусто)"), 'price', p.price, 'number', 'min="0" step="any"')}${field(t("Норма на человеко-день (неизвестна — пусто)"), 'rate', p.rate, 'number', 'min="0" step="any"')}${field(t("Лимит целевого запаса (необязательно)"), 'max_stock', p.max_stock, 'number', 'min="0" step="any"')}${p.name_status==='provisional'?`<div class="full notice">${t('Название поставщика ещё не сверено. Можно связать товар с оригинальной карточкой через справочник.')}</div>`:''}<div class="full notice info">${t("Норма — расход в единицах товара на одно посещение офиса за день.")} ${esc(label(p.rate_source) || t("Настраивается вручную"))}. ${t("Для скоропортящегося задайте лимит запаса. Сроки партий пока не учитываются.")}</div><div class="full"><h3>${t("Что означает каждый уровень")}</h3><p class="tiny muted" style="margin:5px 0 12px">${t("Представительное количество для расчёта, не границы интервалов. «Нет» всегда 0. Настройки сразу влияют на последнюю отметку уровня.")}</p><div class="thresholds">${state.levels.map((l, i) => field(esc(label(l)), 't' + i, p.thresholds[i], 'number', `step="any" min="0" required ${i === 0 ? 'readonly' : ''}`)).join('')}</div></div>${field(t("Ссылка на товар в магазине"), 'url', p.url, 'url', 'placeholder="https://…"')}${field(t("Ссылка на фото"), 'image', p.image?.startsWith('data:') ? '' : p.image, 'url', 'placeholder="https://…"')}<label class="field full"><span>${t("Или загрузите реальное фото (до 2 МБ)")}</span><input type="file" name="photo" accept="image/png,image/jpeg,image/webp"></label><label class="field full"><span>${t("Примечание")}</span><textarea name="notes">${esc(p.notes)}</textarea></label><label class="checkbox full"><input type="checkbox" name="active" ${p.active ? 'checked' : ''}>${t("Показывать в обходе и плане закупок")}</label></div>${foot()}`, async f => {
+  modal(id ? t("Карточка товара") : t("Новый товар"), `<div class="form-grid">${field(t("Название как у поставщика"), 'name', p.name, 'text', 'required')}${field(t("Артикул поставщика"),'supplier_sku',p.supplier_sku)}${field(t("Поставщик"), 'supplier', p.supplier, 'text', 'required')}${field(t("Категория"), 'category', p.category, 'text', 'required')}${field(t("Единица учёта (шт., кг, л)"), 'unit', p.unit, 'text', 'required')}${field(t("Шаг заказа в единицах учёта"), 'step', p.step, 'number', 'min="0.001" step="any" required')}${field(t("Цена за единицу, RSD (неизвестна — пусто)"), 'price', p.price, 'number', 'min="0" step="any"')}${field(t("Норма на человеко-день (неизвестна — пусто)"), 'rate', p.rate, 'number', 'min="0" step="any"')}${field(t("Лимит целевого запаса (необязательно)"), 'max_stock', p.max_stock, 'number', 'min="0" step="any"')}${p.name_status==='provisional'?`<div class="full notice">${t('Название поставщика ещё не сверено. Можно связать товар с оригинальной карточкой через справочник.')}</div>`:''}<div class="full notice info">${t("Норма — расход в единицах товара на одно посещение офиса за день.")} ${esc(label(p.rate_source) || t("Настраивается вручную"))}. ${t("Для скоропортящегося задайте лимит запаса. Сроки партий пока не учитываются.")}</div><div class="full"><h3>${t("Что означает каждый уровень")}</h3><p class="tiny muted" style="margin:5px 0 12px">${t("Представительное количество для расчёта, не границы интервалов. «Нет» всегда 0. Настройки сразу влияют на последнюю отметку уровня.")}</p><div class="thresholds">${state.levels.map((l, i) => field(esc(label(l)), 't' + i, p.thresholds[i], 'number', `step="any" min="0" required ${i === 0 ? 'readonly' : ''}`)).join('')}</div></div>${field(t("Ссылка на товар в магазине"), 'url', p.url, 'url', 'placeholder="https://…"')}${field(t("Ссылка на фото"), 'image', (p.image?.startsWith('data:')||p.image?.startsWith('/assets/')) ? '' : p.image, 'url', 'placeholder="https://…"')}<label class="field full"><span>${t("Или загрузите реальное фото (до 2 МБ)")}</span><input type="file" name="photo" accept="image/png,image/jpeg,image/webp"></label><label class="field full"><span>${t("Примечание")}</span><textarea name="notes">${esc(p.notes)}</textarea></label>${p.archived?`<label class="checkbox full"><input type="checkbox" name="restore">${t('Восстановить из архива')}</label>`:''}<label class="checkbox full"><input type="checkbox" name="active" ${p.active ? 'checked' : ''}>${t("Показывать в обходе и плане закупок")}</label></div>${foot()}`, async f => {
     let image = f.get('image');
     const file = f.get('photo');
     if (file?.size) {
       if (file.size > 2e6) throw Error(t("Фото должно быть меньше 2 МБ"));
       if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) throw Error(t("Нужен PNG, JPEG или WebP"));
       image = await dataURL(file);
-    } else if (!image && p.image?.startsWith('data:')) image = p.image;
+    } else if (!image && (p.image?.startsWith('data:')||p.image?.startsWith('/assets/'))) image = p.image;
     await api('product', {
       ...p,
       ...Object.fromEntries(f),
       id,
       active: f.has('active'),
+      archived: Boolean(p.archived)&&!f.has('restore'),
       image,
       thresholds: state.levels.map((_, i) => Number(f.get('t' + i)))
     });
@@ -253,16 +257,17 @@ function dataURL(file) {
   });
 }
 function observationModal(pid) {
-  if (!products().length) return notify(t("Сначала добавьте товар"), true);
-  modal(t("Инвентаризация"), `<div class="notice info">${t("Указывайте суммарный остаток во всём офисе на конец выбранного дня, после всех поступлений. Только точные инвентаризации используются для калибровки.")}</div><div class="form-grid"><label class="field full"><span>${t("Товар")}</span><select name="product_id">${options(products(), pid)}</select></label>${field(t("Дата"), 'date', today(), 'date', 'required max="' + today() + '"')}<label class="field"><span>${t("Тип")}</span><select name="kind"><option value="exact">${t("Точное количество")}</option><option value="estimate">${t("Приблизительная оценка")}</option></select></label>${field(t("Количество в единицах товара"), 'qty', '', 'number', 'min="0" step="any" required')}<label class="field"><span>${t("Комментарий")}</span><input name="note" placeholder="${t("Склад + кухни")}"></label></div>${foot()}`, async f => {
+  const current=products().filter(p=>!p.archived);if (!current.length) return notify(t("Сначала добавьте товар"), true);
+  modal(t("Инвентаризация"), `<div class="notice info">${t("Указывайте суммарный остаток во всём офисе на конец выбранного дня, после всех поступлений. Только точные инвентаризации используются для калибровки.")}</div><div class="form-grid"><label class="field full"><span>${t("Товар")}</span><select name="product_id">${options(current, pid)}</select></label>${field(t("Дата"), 'date', today(), 'date', 'required max="' + today() + '"')}<label class="field"><span>${t("Тип")}</span><select name="kind"><option value="exact">${t("Точное количество")}</option><option value="estimate">${t("Приблизительная оценка")}</option></select></label>${field(t("Количество в единицах товара"), 'qty', '', 'number', 'min="0" step="any" required')}<label class="field"><span>${t("Комментарий")}</span><input name="note" placeholder="${t("Склад + кухни")}"></label></div>${foot()}`, async f => {
     await api('observation', Object.fromEntries(f));
     notify(t("Остаток сохранён"));
   });
   cancel();
 }
 function productsView() {
-  const ps = products().filter(p => [p.name,p.legacy_name,p.supplier_sku].some(v=>String(v||'').toLowerCase().includes(search.toLowerCase())));
-  $('#content').innerHTML = pagehead(t("НАСТРОЙКИ КЛАДОВОЙ"), t("Каталог товаров"), t("Названия, фотографии, нормы и значения уровней — всё можно изменить."), `<button class="btn primary" id="add-product">＋ ${t("Добавить товар")}</button>`) + `<div class="toolbar"><input type="search" id="catalog-search" placeholder="⌕  ${t("Поиск по каталогу")}" value="${esc(search)}"><button class="btn" id="exact">${t("Точная инвентаризация")}</button></div><div class="table-wrap"><table><thead><tr><th>${t("Товар")}</th><th>${t("Поставщик")}</th><th>${t("Норма / чел.-день")}</th><th>${t("Остаток")}*</th><th>${t("Настройки")}</th></tr></thead><tbody>${ps.map(p => `<tr><td class="name"><strong>${esc(p.name)}</strong>${p.name_status==='provisional'?`<span class="badge warn">${t('Название не сверено')}</span>`:''}<small>${esc(p.supplier_sku||'')} · ${esc(label(p.category))} · ${esc(label(p.unit))} ${p.active ? '' : t("· скрыт")}</small></td><td>${esc(label(p.supplier))}</td><td>${fmt(p.rate)}<div class="tiny muted">${p.rate == null ? t("Нужно настроить") : esc(label(p.rate_source))}</div></td><td>${fmt(p.estimated_stock)}<div class="tiny muted">${date(p.observation?.date)}</div></td><td><div class="actions"><button class="btn small" data-edit="${p.id}">${t("Изменить")}</button><button class="btn small" data-calibrate="${p.id}">${t("Калибровка")}</button></div></td></tr>`).join('')}</tbody></table></div><p class="footer-note">* ${t("Последний остаток + поступления после даты проверки. Расход после проверки не вычитается: обновляйте отметки перед расчётом заказа.")}</p>`;
+  const ps = products().filter(p=>Boolean(p.archived)===catalogShowArchived).filter(p => [p.name,p.legacy_name,p.supplier_sku].some(v=>String(v||'').toLowerCase().includes(search.toLowerCase())));
+  $('#content').innerHTML = pagehead(t("НАСТРОЙКИ КЛАДОВОЙ"), t("Каталог товаров"), t("Названия, фотографии, нормы и значения уровней — всё можно изменить."), `<button class="btn primary" id="add-product">＋ ${t("Добавить товар")}</button>`) + `<div class="toolbar"><input type="search" id="catalog-search" placeholder="⌕  ${t("Поиск по каталогу")}" value="${esc(search)}"><button class="btn" id="exact">${t("Точная инвентаризация")}</button><label class="checkbox tiny"><input type="checkbox" id="show-archived" ${catalogShowArchived?'checked':''}>${t('Архив')}</label></div><div class="table-wrap"><table><thead><tr><th>${t("Товар")}</th><th>${t("Поставщик")}</th><th>${t("Норма / чел.-день")}</th><th>${t("Остаток")}*</th><th>${t("Настройки")}</th></tr></thead><tbody>${ps.map(p => `<tr><td class="name"><strong>${esc(p.name)}</strong>${p.name_status==='provisional'?`<span class="badge warn">${t('Название не сверено')}</span>`:''}<small>${esc(p.supplier_sku||'')} · ${esc(label(p.category))} · ${esc(label(p.unit))} ${p.active ? '' : t("· скрыт")}</small></td><td>${esc(label(p.supplier))}</td><td>${fmt(p.rate)}<div class="tiny muted">${p.rate == null ? t("Нужно настроить") : esc(label(p.rate_source))}</div></td><td>${fmt(p.estimated_stock)}<div class="tiny muted">${date(p.observation?.date)}</div></td><td><div class="actions"><button class="btn small" data-edit="${p.id}">${t("Изменить")}</button><button class="btn small" data-calibrate="${p.id}">${t("Калибровка")}</button></div></td></tr>`).join('')}</tbody></table></div><p class="footer-note">* ${t("Последний остаток + поступления после даты проверки. Расход после проверки не вычитается: обновляйте отметки перед расчётом заказа.")}</p>`;
+  $('#show-archived').onchange=e=>{catalogShowArchived=e.target.checked;productsView()};
   $('#add-product').onclick = () => productModal();
   $('#exact').onclick = () => observationModal();
   const btn=document.createElement('button');btn.className='btn';btn.id='supplier-catalog';btn.textContent=t('Справочники поставщиков');btn.onclick=()=>supplierCatalogue();$('.toolbar').append(btn);
@@ -380,7 +385,7 @@ function deliveriesView() {
   $('#audit').onclick = auditModal;
 }
 function deliveryModal(id) {
-  if (!products().length) return notify(t("Сначала добавьте товары в этом офисе"), true);
+  const current=products().filter(p=>!p.archived);if (!current.length&&!id) return notify(t("Сначала добавьте товары в этом офисе"), true);
   const d = state.deliveries.find(d => d.id === id) || {
     office: selectedOffice,
     date: today(),
@@ -388,7 +393,7 @@ function deliveryModal(id) {
     number: '',
     notes: '',
     lines: [{
-      product_id: products()[0].id,
+      product_id: current[0].id,
       qty: 1,
       price: null
     }]
@@ -416,7 +421,7 @@ function deliveryModal(id) {
   });
   cancel();
   function draw() {
-    $('#delivery-lines').innerHTML = lines.map((l, i) => `<div class="line-item"><select aria-label="${t("Товар в строке")} ${i + 1}" data-line="${i}" data-key="product_id">${options(products(), l.product_id)}</select><input type="number" aria-label="${t("Количество в строке")} ${i + 1}" data-line="${i}" data-key="qty" value="${l.qty}" required min="0.001" step="any"><input type="number" aria-label="${t("Цена в строке")} ${i + 1}" data-line="${i}" data-key="price" value="${l.price ?? ''}" min="0" step="any"><button class="close" type="button" data-remove="${i}" aria-label="${t("Удалить строку")}">×</button></div>`).join('');
+    $('#delivery-lines').innerHTML = lines.map((l, i) => `<div class="line-item"><select aria-label="${t("Товар в строке")} ${i + 1}" data-line="${i}" data-key="product_id">${options(products().filter(p=>!p.archived||p.id===l.product_id), l.product_id)}</select><input type="number" aria-label="${t("Количество в строке")} ${i + 1}" data-line="${i}" data-key="qty" value="${l.qty}" required min="0.001" step="any"><input type="number" aria-label="${t("Цена в строке")} ${i + 1}" data-line="${i}" data-key="price" value="${l.price ?? ''}" min="0" step="any"><button class="close" type="button" data-remove="${i}" aria-label="${t("Удалить строку")}">×</button></div>`).join('');
     $$('[data-line]').forEach(el => el.onchange = () => {
       lines[Number(el.dataset.line)][el.dataset.key] = el.value === '' ? null : Number(el.value);
     });
@@ -427,7 +432,7 @@ function deliveryModal(id) {
   }
   $('#add-line').onclick = () => {
     lines.push({
-      product_id: products()[0].id,
+      product_id: current[0].id,
       qty: 1,
       price: null
     });
@@ -531,18 +536,70 @@ try {
 async function supplierCatalogue(supplier='Maxi',query='',page=1){
  try{
   const data=await api('supplier-catalog?'+new URLSearchParams({supplier,q:query,page}));
-  modal(t('Справочники поставщиков'),`<div class="notice info">${t('Название, артикул, фото и ссылка сохраняются из источника без перевода. Нормы и остатки не изменяются.')}</div><div class="toolbar"><select id="catalog-supplier">${Object.keys(data.suppliers).map(s=>`<option ${s===supplier?'selected':''}>${esc(s)}</option>`).join('')}</select><input id="supplier-search" placeholder="${t('Поиск в справочнике')}" value="${esc(query)}"></div><div class="actions"><label class="btn" for="catalog-file">${t('Загрузить CSV / JSON / HTML')}</label><input hidden type="file" id="catalog-file" accept=".csv,.json,.html,.htm"><button type="button" class="btn" id="store-export">${t('Выгрузить из магазина')}</button><a class="btn" target="_blank" rel="noopener noreferrer" href="${data.suppliers[supplier]}">${t('Открыть магазин')} ↗</a><button type="button" class="text-link" id="catalog-template">${t('Шаблон CSV')}</button></div><p class="help-text" style="margin:15px 0">${t('Это справочник, а не полная синхронизация магазина. Цены и наличие относятся к моменту выгрузки.')}</p><div class="table-wrap"><table><thead><tr><th>${t('Товар')}</th><th>${t('Артикул поставщика')}</th><th></th></tr></thead><tbody>${data.rows.map(r=>`<tr><td class="name"><strong>${esc(r.name)}</strong>${r.url?`<small><a href="${esc(r.url)}" target="_blank" rel="noopener noreferrer">${t('Открыть магазин')} ↗</a></small>`:''}</td><td>${esc(r.sku||'—')}</td><td><button type="button" class="btn small" data-select-catalog="${r.id}">${t('Добавить в офис')} / ${t('Связать с товаром')}</button></td></tr>`).join('')||`<tr><td>${t('Пока нет товаров')}</td></tr>`}</tbody></table></div><div class="actions"><button class="btn small" id="catalog-prev" type="button" ${page<=1?'disabled':''}>${t('Предыдущая')}</button><span class="tiny">${t('Страница')} ${page} · ${data.total}</span><button class="btn small" id="catalog-next" type="button" ${page*40>=data.total?'disabled':''}>${t('Следующая')}</button></div>`);
+  modal(t('Справочники поставщиков'),`<div class="notice info">${t('Название, артикул, фото и ссылка сохраняются из источника без перевода. Нормы и остатки не изменяются.')}</div><div class="toolbar"><select id="catalog-supplier">${Object.keys(data.suppliers).map(s=>`<option ${s===supplier?'selected':''}>${esc(s)}</option>`).join('')}</select><input id="supplier-search" placeholder="${t('Поиск в справочнике')}" value="${esc(query)}"></div><div class="actions"><label class="btn" for="catalog-file">${t('Загрузить CSV / JSON / HTML')}</label><input hidden multiple type="file" id="catalog-file" accept=".csv,.json,.html,.htm"><label class="btn" for="catalog-folder">${t('Выбрать папку')}</label><input hidden multiple type="file" id="catalog-folder" webkitdirectory directory><button class="btn" type="button" id="replace-catalog-files">${t('Заменить каталог из файлов')}</button><button type="button" class="btn" id="store-export">${t('Выгрузить из магазина')}</button><a class="btn" target="_blank" rel="noopener noreferrer" href="${data.suppliers[supplier]}">${t('Открыть магазин')} ↗</a><button type="button" class="text-link" id="catalog-template">${t('Шаблон CSV')}</button></div><p class="help-text" style="margin:15px 0">${t('Это справочник, а не полная синхронизация магазина. Цены и наличие относятся к моменту выгрузки.')}</p><div class="table-wrap"><table><thead><tr><th>${t('Товар')}</th><th>${t('Артикул поставщика')}</th><th></th></tr></thead><tbody>${data.rows.map(r=>`<tr><td class="name"><strong>${esc(r.name)}</strong>${r.url?`<small><a href="${esc(r.url)}" target="_blank" rel="noopener noreferrer">${t('Открыть магазин')} ↗</a></small>`:''}</td><td>${esc(r.sku||'—')}</td><td><button type="button" class="btn small" data-select-catalog="${r.id}">${t('Добавить в офис')} / ${t('Связать с товаром')}</button></td></tr>`).join('')||`<tr><td>${t('Пока нет товаров')}</td></tr>`}</tbody></table></div><div class="actions"><button class="btn small" id="catalog-prev" type="button" ${page<=1?'disabled':''}>${t('Предыдущая')}</button><span class="tiny">${t('Страница')} ${page} · ${data.total}</span><button class="btn small" id="catalog-next" type="button" ${page*40>=data.total?'disabled':''}>${t('Следующая')}</button></div>`);
   $('#catalog-supplier').onchange=e=>supplierCatalogue(e.target.value);
   $('#supplier-search').onchange=e=>supplierCatalogue(supplier,e.target.value);
   $('#catalog-prev').onclick=()=>supplierCatalogue(supplier,query,page-1);$('#catalog-next').onclick=()=>supplierCatalogue(supplier,query,page+1);
   $('#store-export').onclick=exporterModal;
   $('#catalog-template').onclick=()=>download('supplier-products.csv','name,sku,url,image,price,currency,unit,category\n','text/csv');
-  $('#catalog-file').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{if(f.size>10e6)throw Error(t('Файл слишком большой'));const ext=f.name.split('.').pop().toLowerCase();const format=['html','htm'].includes(ext)?'html':ext;const preview=await api('catalog/preview',{supplier,content:await f.text(),format});catalogPreview(supplier,preview)}catch(err){notify(err.message,true)}};
+  let requestedMode='supplier';
+  $('#replace-catalog-files').onclick=()=>{requestedMode='replace';$('#catalog-file').click()};
+  $('label[for="catalog-file"]').onclick=()=>{requestedMode='supplier'};
+  $('#catalog-file').onchange=e=>{const mode=requestedMode;requestedMode='supplier';prepareCatalogFiles(e.target.files,supplier,mode)};
+  $('#catalog-folder').onchange=e=>prepareCatalogFiles(e.target.files,supplier);
   $$('[data-select-catalog]').forEach(b=>b.onclick=()=>selectCatalogue(data.rows.find(r=>r.id===Number(b.dataset.selectCatalog))));
  }catch(e){notify(e.message,true)}
 }
-function catalogPreview(supplier,data){
- modal(t('Проверка импорта'),`<p>${esc(supplier)} · ${data.rows.length} / ${data.total}</p>${data.errors.length?`<div class="notice">${data.errors.map(e=>`#${e.row}: ${esc(t(e.error))}`).join('<br>')}</div>`:''}<label class="checkbox" style="margin:15px 0"><input type="checkbox" checked id="select-all">${t('Выбрать все')}</label><div class="table-wrap"><table><thead><tr><th></th><th>${t('Название из источника')}</th><th>${t('Артикул поставщика')}</th><th>${t('Цена RSD')}</th></tr></thead><tbody>${data.rows.map((r,i)=>`<tr><td><input type="checkbox" checked name="row" value="${i}"></td><td class="name">${esc(r.name)}</td><td>${esc(r.sku)}</td><td>${fmt(r.price)}</td></tr>`).join('')}</tbody></table></div><label class="checkbox"><input type="checkbox" required>${t('Подтверждаю выбор товаров и источник данных')}</label>${foot(t('Подтвердить выбранные'))}`,async f=>{const rows=f.getAll('row').map(i=>data.rows[Number(i)]);if(!rows.length)throw Error(t('Выберите товары'));const result=await api('catalog/import',{supplier,rows});notify(t('Добавлено в справочник')+': '+result.count)});cancel();$('#select-all').onchange=e=>$$('[name="row"]').forEach(c=>c.checked=e.target.checked);
+async function prepareCatalogFiles(files,supplier,mode='supplier'){
+ const selected=importFiles(files),ignored=files.length-selected.length;
+ if(!selected.length)return notify(t('Выберите файлы products-*.json или папку сбора'),true);
+ if(selected.some(f=>f.size>10e6)||selected.reduce((s,f)=>s+f.size,0)>1_000_000_000)return notify(t('Файл слишком большой'),true);
+ let cancelled=false;const dialog=$('#modal');
+ modal(t('Подготовка импорта'),`<p class="help-text">${t('Проверяем файлы. Каталог пока не меняется.')}</p><progress id="catalog-prepare-progress" max="${selected.length}" value="0" style="width:100%"></progress><p id="catalog-prepare-status" role="status"></p><button type="button" id="cancel-prepare" class="btn">${t('Отмена')}</button>`);
+ const stop=()=>{cancelled=true};dialog.addEventListener('close',stop);$('#cancel-prepare').onclick=()=>dialog.close();
+ const all=[],errors=[];let total=0;
+ try{
+  for(let i=0;i<selected.length;i++){
+   if(cancelled)return;const file=selected[i];$('#catalog-prepare-status').textContent=`${i+1} / ${selected.length} · ${file.name}`;
+   try{const ext=file.name.split('.').pop().toLowerCase();const data=await api('catalog/preview',{supplier,content:await file.text(),format:['html','htm'].includes(ext)?'html':ext});
+    all.push(...data.rows);total+=data.total;errors.push(...data.errors.map(e=>({...e,file:file.name})))
+   }catch(e){errors.push({file:file.name,error:e.message})}
+   if(cancelled)return;$('#catalog-prepare-progress').value=i+1;
+  }
+  const rows=mergeCatalogRows(all);
+  if(!cancelled)catalogPreview(supplier,{rows,errors,total,files:selected.length,ignored,duplicates:all.length-rows.length},mode);
+ }finally{dialog.removeEventListener('close',stop)}
+}
+function catalogPreview(supplier,data,initialMode='supplier'){
+ let jobId=null,chosen=null;const saved=new Set();
+ modal(t('Проверка импорта'),`<p>${esc(supplier)} · ${t('Файлов')}: ${data.files||1} · ${t('Товаров')}: ${data.rows.length}</p><div class="notice info">${t('Фото уже находятся внутри products-*.json. Папка images и report.json отдельно не нужны.')}</div><p class="tiny muted">${t('Пропущено служебных файлов')}: ${data.ignored||0} · ${t('Повторов')}: ${data.duplicates||0}</p>${data.errors.length?`<div class="notice">${data.errors.map(e=>`${esc(e.file||'')} ${e.row?'#'+e.row:''}: ${esc(t(e.error))}`).join('<br>')}</div>`:''}<label class="field" style="margin:15px 0"><span>${t('Что сделать с товарами')}</span><select name="import_mode" id="catalog-import-mode"><option value="supplier">${t('Только в справочник поставщика')}</option><option value="add">${t('Добавить в товары CRM')}</option><option value="replace">${t('Заменить каталог текущего офиса')}</option></select></label><div class="notice" id="catalog-replace-warning" hidden>${esc(label(selectedOffice))}: ${t('Старые карточки уйдут в архив. История сохранится. Новый каталог появится только после загрузки всех выбранных товаров.')}</div><div class="notice" id="catalog-replace-errors" hidden>${t('Для замены исправьте ошибки во всех файлах.')}</div><label class="checkbox" style="margin:15px 0"><input type="checkbox" checked id="select-all">${t('Выбрать все')}</label><div class="table-wrap" style="max-height:40vh"><table><thead><tr><th></th><th>${t('Название из источника')}</th><th>${t('Артикул поставщика')}</th><th>${t('Ед.')}</th><th>${t('Цена RSD')}</th><th>${t('Фото')}</th></tr></thead><tbody>${data.rows.map((r,i)=>`<tr><td><input type="checkbox" checked name="row" value="${i}"></td><td class="name">${esc(r.name)}</td><td>${esc(r.sku)}</td><td>${esc(label(r.unit))}</td><td>${fmt(r.price)}</td><td>${r.image?(r.image.startsWith('data:')||r.image.startsWith('/assets/')?t('Локально'):t('Ссылка')):'—'}</td></tr>`).join('')}</tbody></table></div><label class="checkbox"><input type="checkbox" required>${t('Подтверждаю выбор товаров и источник данных')}</label><progress hidden id="catalog-import-progress" value="0" max="1" style="width:100%"></progress><p id="catalog-import-status" role="status" style="margin-top:12px"></p>${foot(t('Подтвердить выбранные'))}`,async f=>{
+  if(!jobId)chosen=f.getAll('row').map(Number);
+  if(!chosen.length)throw Error(t('Выберите товары'));
+  const mode=$('#catalog-import-mode').value;
+  if(mode==='replace'&&data.errors.length)throw Error(t('Для замены исправьте ошибки во всех файлах.'));
+  const dialog=$('#modal'),prevent=e=>e.preventDefault(),unload=e=>{e.preventDefault();e.returnValue=''};
+  dialog.addEventListener('cancel',prevent);window.addEventListener('beforeunload',unload);
+  const controls=[...dialog.querySelectorAll('input,select,button')];controls.forEach(el=>el.disabled=true);
+  const progress=$('#catalog-import-progress'),status=$('#catalog-import-status');progress.hidden=false;progress.max=chosen.length;
+  try{
+   if(!jobId)jobId=(await api('catalog/import-start',{supplier,office:selectedOffice,mode})).job_id;
+   const pending=chosen.filter(i=>!saved.has(i));const indices=new Map(pending.map(i=>[data.rows[i],i]));
+   const batches=importBatches(pending.map(i=>data.rows[i]),supplier,jobId);
+   for(const batch of batches){status.textContent=`${t('Импорт товаров')}: ${saved.size} / ${chosen.length}`;await api('catalog/import',{supplier,job_id:jobId,rows:batch});batch.forEach(row=>saved.add(indices.get(row)));progress.value=saved.size}
+   status.textContent=t('Применяем изменения каталога…');
+   const result=await api('catalog/import-finish',{job_id:jobId,expected_count:chosen.length});
+   catalogShowArchived=false;
+   notify(`${t('Импорт завершён')}: ${result.count}. ${t('Новых карточек')}: ${result.created}. ${t('В архиве')}: ${result.archived}.`);
+  }catch(e){status.textContent=`${t('Уже сохранено')}: ${saved.size} / ${chosen.length}. ${t('Повторите подтверждение, чтобы продолжить.')} ${t(e.message)}`;throw e}
+  finally{
+   dialog.removeEventListener('cancel',prevent);window.removeEventListener('beforeunload',unload);
+   dialog.querySelector('.close').disabled=false;$('[data-cancel]').disabled=false;
+   if(!jobId)controls.forEach(el=>el.disabled=false);
+  }
+ });
+ cancel();const mode=$('#catalog-import-mode');mode.value=initialMode;
+ const update=()=>{$('#catalog-replace-warning').hidden=mode.value!=='replace';$('#catalog-replace-errors').hidden=!(mode.value==='replace'&&data.errors.length);$('#modal-form button[type="submit"],#modal-form .modal-foot button:last-child').disabled=!data.rows.length||(mode.value==='replace'&&data.errors.length>0)};
+ mode.onchange=update;update();$('#select-all').onchange=e=>$$('[name="row"]').forEach(c=>c.checked=e.target.checked);
 }
 function selectCatalogue(item){
  const existing=products().filter(p=>p.supplier===item.supplier);

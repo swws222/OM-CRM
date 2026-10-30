@@ -63,6 +63,7 @@ def normalise(row,supplier):
         except ValueError:raise ValueError('Invalid embedded product photo')
         signatures={'image/png':raw.startswith(b'\x89PNG\r\n\x1a\n'),'image/jpeg':raw.startswith(b'\xff\xd8\xff'),'image/webp':raw.startswith(b'RIFF') and raw[8:12]==b'WEBP'}
         if not signatures[match[1]]:raise ValueError('Invalid embedded product photo')
+    elif isinstance(image,str) and re.fullmatch(r'/assets/catalog/[a-f0-9]{64}\.(png|jpg|webp)',image):pass
     else:image=url(image,supplier)
     offer=row.get('offers',{})
     if isinstance(offer,list):offer=offer[0] if offer else {}
@@ -89,6 +90,7 @@ def preview(content,format,supplier):
         rows=list(reader)
     elif format=='json':
         data=json.loads(content)
+        if isinstance(data,dict) and data.get('supplier') and data['supplier']!=supplier:raise ValueError('Поставщик в файле не совпадает с выбранным')
         if isinstance(data,dict) and 'products' in data:rows=data['products']
         elif isinstance(data,list) and all(isinstance(x,dict) and 'name' in x and '@type' not in x for x in data):rows=data
         else:rows=list(walk(data))
@@ -107,22 +109,21 @@ def preview(content,format,supplier):
         except (ValueError,TypeError) as e:errors.append(dict(row=i,error=str(e)))
     return dict(rows=result,errors=errors,total=len(rows))
 
-def upsert(c,supplier,rows,stamp,log):
+def upsert(c,supplier,rows,stamp,log,image_store=None):
     if supplier not in SUPPLIERS:raise ValueError('Unknown supplier')
     if not isinstance(rows,list) or not 1<=len(rows)<=5000:raise ValueError('Select between 1 and 5000 products')
     normalised=[normalise(r,supplier) for r in rows];ids=[]
     for p in normalised:
         old=c.execute('SELECT id,data FROM supplier_catalog WHERE supplier=? AND external_key=?',(supplier,p['external_key'])).fetchone()
         if not old and p['url']:
-            for candidate in c.execute('SELECT id,data FROM supplier_catalog WHERE supplier=?',(supplier,)):
-                if json.loads(candidate['data']).get('url')==p['url']:
-                    old=candidate
-                    prior=json.loads(candidate['data'])
-                    if not p['sku'] and prior.get('sku'):p['sku']=prior['sku'];p['external_key']=prior['external_key']
-                    break
+            old=c.execute('SELECT id,data FROM supplier_catalog WHERE supplier=? AND url=?',(supplier,p['url'])).fetchone()
+            if old:
+                prior=json.loads(old['data'])
+                if not p['sku'] and prior.get('sku'):p['sku']=prior['sku'];p['external_key']=prior['external_key']
+        if image_store:p['image']=image_store(p['image'])
         p['imported_at']=stamp;p['source']='supplier_import'
         if old:
-            id=old['id'];c.execute('UPDATE supplier_catalog SET external_key=?,data=? WHERE id=?',(p['external_key'],json.dumps(p,ensure_ascii=False),id))
-        else:id=c.execute('INSERT INTO supplier_catalog(supplier,external_key,data) VALUES(?,?,?)',(supplier,p['external_key'],json.dumps(p,ensure_ascii=False))).lastrowid
+            id=old['id'];c.execute('UPDATE supplier_catalog SET external_key=?,data=?,url=?,name_search=? WHERE id=?',(p['external_key'],json.dumps(p,ensure_ascii=False),p['url'],(p['name']+' '+p['sku']).casefold(),id))
+        else:id=c.execute('INSERT INTO supplier_catalog(supplier,external_key,data,url,name_search) VALUES(?,?,?,?,?)',(supplier,p['external_key'],json.dumps(p,ensure_ascii=False),p['url'],(p['name']+' '+p['sku']).casefold())).lastrowid
         log(c,'update' if old else 'create','supplier_catalog',id,json.loads(old['data']) if old else None,p);ids.append(id)
     return ids

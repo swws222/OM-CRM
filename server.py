@@ -9,6 +9,8 @@ import os
 from pathlib import Path
 import secrets
 import sqlite3
+import uuid
+import re
 from zoneinfo import ZoneInfo
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
@@ -58,8 +60,17 @@ def init():
         CREATE TABLE IF NOT EXISTS audit(id INTEGER PRIMARY KEY,at TEXT,action TEXT,kind TEXT,entity_id TEXT,before_json TEXT,after_json TEXT);
         CREATE TABLE IF NOT EXISTS orders(id INTEGER PRIMARY KEY, created_at TEXT NOT NULL, data TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY,value TEXT);
-        CREATE TABLE IF NOT EXISTS supplier_catalog(id INTEGER PRIMARY KEY,supplier TEXT NOT NULL,external_key TEXT NOT NULL,data TEXT NOT NULL,UNIQUE(supplier,external_key));
+        CREATE TABLE IF NOT EXISTS supplier_catalog(id INTEGER PRIMARY KEY,supplier TEXT NOT NULL,external_key TEXT NOT NULL,data TEXT NOT NULL,url TEXT NOT NULL DEFAULT '',name_search TEXT NOT NULL DEFAULT '',UNIQUE(supplier,external_key));
+        CREATE TABLE IF NOT EXISTS catalog_import_jobs(id TEXT PRIMARY KEY,data TEXT NOT NULL);
         ''')
+        columns={r[1] for r in c.execute('PRAGMA table_info(supplier_catalog)')}
+        if not {'url','name_search'}.issubset(columns):
+            c.execute('BEGIN IMMEDIATE')
+            for col in ('url','name_search'):
+                if col not in columns:c.execute(f"ALTER TABLE supplier_catalog ADD COLUMN {col} TEXT NOT NULL DEFAULT ''")
+            for row in c.execute('SELECT id,data FROM supplier_catalog').fetchall():
+                item=json.loads(row['data']);c.execute('UPDATE supplier_catalog SET url=?,name_search=? WHERE id=?',(item.get('url',''),(item['name']+' '+item.get('sku','')).casefold(),row['id']))
+        c.execute('CREATE INDEX IF NOT EXISTS supplier_catalog_url ON supplier_catalog(supplier,url)')
         if not c.execute("SELECT 1 FROM meta WHERE key='seeded'").fetchone():
             seed=json.loads((ROOT/'data/seed.json').read_text())
             for p in seed['products']:
@@ -138,7 +149,9 @@ def save_product(c,b,id=None):
     p['rate']=num(b.get('rate'),'Норма',nullable=True); p['price']=num(b.get('price'),'Цена',nullable=True)
     p['max_stock']=num(b.get('max_stock'),'Максимальный запас',nullable=True)
     p['step']=num(b.get('step'),'Шаг',minimum=.001)
-    p['active']=bool(b.get('active',True))
+    p['archived']=bool(b.get('archived',(old or {}).get('archived',False)))
+    p['active']=bool(b.get('active',True)) and not p['archived']
+    p['image']=store_image(p['image'])
     t=b.get('thresholds',[])
     if len(t)!=6: raise ValueError('Нужно шесть значений уровней')
     p['thresholds']=[num(v,'Порог') for v in t]
@@ -197,14 +210,73 @@ def save_delivery(c,b,id=None):
     log(c,'update' if old else 'create','delivery',id,old,d)
     return id
 
+def store_image(value):
+    if not value or not value.startswith('data:'):return value
+    match=re.fullmatch(r'data:(image/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)',value)
+    if not match or len(value)>3_000_000:raise ValueError('Invalid embedded product photo')
+    try:raw=base64.b64decode(match[2],validate=True)
+    except ValueError:raise ValueError('Invalid embedded product photo')
+    valid={'image/png':raw.startswith(b'\x89PNG\r\n\x1a\n'),'image/jpeg':raw.startswith(b'\xff\xd8\xff'),'image/webp':raw.startswith(b'RIFF') and raw[8:12]==b'WEBP'}
+    if not valid[match[1]]:raise ValueError('Invalid embedded product photo')
+    extension={'image/png':'png','image/jpeg':'jpg','image/webp':'webp'}[match[1]]
+    name=hashlib.sha256(raw).hexdigest()+'.'+extension;folder=DATA/'catalog-images';folder.mkdir(exist_ok=True)
+    if not (folder/name).exists():(folder/name).write_bytes(raw)
+    return '/assets/catalog/'+name
+
+def read_import_job(c,id):
+    row=c.execute('SELECT data FROM catalog_import_jobs WHERE id=?',(str(id),)).fetchone()
+    if not row:raise ValueError('Импорт не найден')
+    return json.loads(row['data'])
+
+def start_catalog_import(c,b):
+    supplier=b.get('supplier');o=office(b.get('office'));mode=b.get('mode','supplier')
+    if supplier not in catalog.SUPPLIERS:raise ValueError('Unknown supplier')
+    if mode not in ('supplier','add','replace'):raise ValueError('Недопустимый режим импорта')
+    id=uuid.uuid4().hex;job=dict(supplier=supplier,office=o,mode=mode,status='preparing',catalog_ids=[],created_at=now())
+    c.execute('INSERT INTO catalog_import_jobs VALUES(?,?)',(id,json.dumps(job,ensure_ascii=False)))
+    return {'job_id':id}
+
+def finish_catalog_import(c,b):
+    c.execute('BEGIN IMMEDIATE')
+    job=read_import_job(c,b['job_id'])
+    if job['status']=='finished':return job['result']
+    ids=set(job['catalog_ids']);expected=int(b['expected_count'])
+    if not ids or len(ids)!=expected:raise ValueError('Не все товары загружены. Каталог ещё не заменён.')
+    if job['status']!='preparing':raise ValueError('Недопустимое состояние импорта')
+    result=dict(count=len(ids),created=0,updated=0,archived=0)
+    if job['mode']!='supplier':
+        existing=[dict(json.loads(r['data']),id=r['id']) for r in c.execute('SELECT id,data FROM products')]
+        linked={p.get('catalog_id'):p for p in existing if p['office']==job['office'] and p.get('catalog_id') in ids}
+        for catalog_id in sorted(ids):
+            row=c.execute('SELECT supplier,data FROM supplier_catalog WHERE id=?',(catalog_id,)).fetchone()
+            if not row or row['supplier']!=job['supplier']:raise ValueError('Товар справочника не найден')
+            item=json.loads(row['data']);old=linked.get(catalog_id)
+            p=old.copy() if old else dict(office=job['office'],category=item['category'],unit=item['unit'],step=1,rate=None,rate_source='Нет истории потребления',price=item['price'],active=True,notes='',thresholds=[0,1,3,6,12,24],max_stock=None,legacy_name='')
+            p.update(name=item['name'],supplier=item['supplier'],supplier_sku=item['sku'],url=item['url'],image=store_image(item.get('image') or p.get('image','')),catalog_id=catalog_id,name_status='supplier_import',archived=False,active=True)
+            p.pop('id',None)
+            if old:
+                id=old['id'];c.execute('UPDATE products SET data=? WHERE id=?',(json.dumps(p,ensure_ascii=False),id));result['updated']+=1
+            else:
+                id=c.execute('INSERT INTO products(data) VALUES(?)',(json.dumps(p,ensure_ascii=False),)).lastrowid;result['created']+=1
+            log(c,'bulk-import','product',id,old,p)
+        if job['mode']=='replace':
+            for p in existing:
+                if p['office']!=job['office'] or p.get('catalog_id') in ids or p.get('archived'):continue
+                old=p.copy();id=p.pop('id');p.update(archived=True,active=False)
+                c.execute('UPDATE products SET data=? WHERE id=?',(json.dumps(p,ensure_ascii=False),id));log(c,'archive','product',id,old,p);result['archived']+=1
+    job.update(status='finished',result=result,finished_at=now());c.execute('UPDATE catalog_import_jobs SET data=? WHERE id=?',(json.dumps(job,ensure_ascii=False),b['job_id']))
+    log(c,'finish','catalog_import',b['job_id'],None,result)
+    return result
+
 class Handler(BaseHTTPRequestHandler):
     def send(self,code,data,ctype='application/json; charset=utf-8',headers=None):
         raw=data if isinstance(data,bytes) else json.dumps(data,ensure_ascii=False).encode() if ctype.startswith('application/json') else data
         self.send_response(code)
         self.send_header('Content-Type',ctype); self.send_header('Content-Length',str(len(raw)))
         self.send_header('X-Content-Type-Options','nosniff'); self.send_header('X-Frame-Options','DENY')
-        self.send_header('Cache-Control','no-store')
-        for k,v in (headers or {}).items(): self.send_header(k,v)
+        self.send_header('Cache-Control',(headers or {}).get('Cache-Control','no-store'))
+        for k,v in (headers or {}).items():
+            if k.lower()!='cache-control':self.send_header(k,v)
         self.end_headers(); self.wfile.write(raw)
     def authenticated(self):
         token=os.environ.get('PANTRY_PASSWORD')
@@ -219,19 +291,32 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if not self.authenticated(): return
         path=urlparse(self.path).path
+        if path.startswith('/assets/catalog/'):
+            name=path.rsplit('/',1)[-1]
+            if not re.fullmatch(r'[a-f0-9]{64}\.(png|jpg|webp)',name):return self.send(404,{'error':'Файл не найден'})
+            file=DATA/'catalog-images'/name
+            if not file.is_file():return self.send(404,{'error':'Файл не найден'})
+            mime={'.png':'image/png','.jpg':'image/jpeg','.webp':'image/webp'}[file.suffix]
+            return self.send(200,file.read_bytes(),mime,{'Cache-Control':'private, max-age=31536000, immutable'})
         with connect() as c:
             if path=='/api/supplier-catalog':
                 q=parse_qs(urlparse(self.path).query);supplier=q.get('supplier',['Maxi'])[0];search=q.get('q',[''])[0].casefold()[:200]
                 try:page=max(1,int(q.get('page',['1'])[0]))
                 except ValueError:return self.send(400,{'error':'Invalid page'})
-                rows=[dict(json.loads(r['data']),id=r['id']) for r in c.execute('SELECT * FROM supplier_catalog WHERE supplier=? ORDER BY id',(supplier,))]
-                rows=[r for r in rows if search in (r['name']+' '+r['sku']).casefold()]
-                return self.send(200,dict(rows=rows[(page-1)*40:page*40],total=len(rows),page=page,suppliers=catalog.PAGES))
+                where='supplier=? AND instr(name_search,?)>0';args=(supplier,search)
+                total=c.execute('SELECT count(*) FROM supplier_catalog WHERE '+where,args).fetchone()[0]
+                rows=[]
+                for r in c.execute('SELECT id,data FROM supplier_catalog WHERE '+where+' ORDER BY id LIMIT 40 OFFSET ?',(*args,(page-1)*40)):
+                    item=dict(json.loads(r['data']),id=r['id']);item['has_image']=bool(item.get('image'))
+                    if item.get('image','').startswith('data:'):item['image']=''
+                    rows.append(item)
+                return self.send(200,dict(rows=rows,total=total,page=page,suppliers=catalog.PAGES))
             if path=='/api/state': return self.send(200,state(c))
             if path=='/api/backup':
-                backup={t:[dict(r) for r in c.execute(f'SELECT * FROM {t}')] for t in ('products','observations','deliveries','attendance','audit','meta','orders','supplier_catalog')}
+                backup={t:[dict(r) for r in c.execute(f'SELECT * FROM {t}')] for t in ('products','observations','deliveries','attendance','audit','meta','orders','supplier_catalog','catalog_import_jobs')}
                 files={f.name:base64.b64encode(f.read_bytes()).decode() for f in (DATA/'files').glob('*.pdf')}
-                return self.send(200,dict(version=1,created_at=now(),tables=backup,files=files),headers={'Content-Disposition':'attachment; filename="pantry-backup.json"'})
+                images={f.name:base64.b64encode(f.read_bytes()).decode() for f in (DATA/'catalog-images').glob('*') if f.is_file()}
+                return self.send(200,dict(version=1,created_at=now(),tables=backup,files=files,images=images),headers={'Content-Disposition':'attachment; filename="pantry-backup.json"'})
             if path=='/api/audit': return self.send(200,[dict(r) for r in c.execute('SELECT * FROM audit ORDER BY id DESC LIMIT 300')])
             if path.startswith('/api/calibrate/'):
                 try: return self.send(200,calibration(state(c),int(path.split('/')[-1])))
@@ -259,8 +344,15 @@ class Handler(BaseHTTPRequestHandler):
             b=json.loads(self.rfile.read(size)); path=urlparse(self.path).path; result={}
             with connect() as c:
                 if path=='/api/catalog/preview':result=catalog.preview(b['content'],b['format'],b['supplier'])
+                elif path=='/api/catalog/import-start':result=start_catalog_import(c,b)
+                elif path=='/api/catalog/import-finish':result=finish_catalog_import(c,b)
                 elif path=='/api/catalog/import':
-                    ids=catalog.upsert(c,b['supplier'],b['rows'],now(),log);result={'count':len(ids)}
+                    job=read_import_job(c,b['job_id']) if b.get('job_id') else None
+                    if job and (job['supplier']!=b['supplier'] or job['status']!='preparing'):raise ValueError('Недопустимое состояние импорта')
+                    ids=catalog.upsert(c,b['supplier'],b['rows'],now(),log,image_store=store_image)
+                    if job:
+                        job['catalog_ids']=list(dict.fromkeys(job['catalog_ids']+ids));c.execute('UPDATE catalog_import_jobs SET data=? WHERE id=?',(json.dumps(job,ensure_ascii=False),b['job_id']))
+                    result={'count':len(ids)}
                 elif path=='/api/catalog/select':
                     row=c.execute('SELECT data FROM supplier_catalog WHERE id=?',(int(b['catalog_id']),)).fetchone()
                     if not row:raise ValueError('Catalogue product not found')
@@ -275,6 +367,7 @@ class Handler(BaseHTTPRequestHandler):
                         if p['office']!=o:raise ValueError('Товар не относится к офису')
                         if supplier_key(p['supplier'])!=supplier_key(item['supplier']):raise ValueError('The existing product belongs to a different supplier')
                     else:p=dict(office=o,category=item['category'],unit=item['unit'],step=1,rate=None,rate_source='Нет истории потребления',price=item['price'],active=True,notes='',thresholds=[0,1,3,6,12,24])
+                    item['image']=store_image(item.get('image',''))
                     p.update(name=item['name'],supplier=item['supplier'],supplier_sku=item['sku'],url=item['url'],image=item['image'] or p.get('image',''))
                     id=save_product(c,p,int(pid) if pid else None)
                     saved=json.loads(c.execute('SELECT data FROM products WHERE id=?',(id,)).fetchone()[0]);saved.update(catalog_id=int(b['catalog_id']),name_status='supplier_import')

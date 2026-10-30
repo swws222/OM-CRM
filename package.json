@@ -5,8 +5,9 @@
   "type": "module",
   "scripts": {
     "start": "python3 server.py",
-    "test": "python3 -m unittest discover -s tests -v && node tests/model.test.js && node tests/i18n.test.js",
-    "test:browser": "node tests/browser.mjs"
+    "test": "python3 -m unittest discover -s tests -v && node tests/model.test.js && node tests/i18n.test.js && node tests/catalog-batch.test.js",
+    "test:browser": "node tests/browser.mjs",
+    "test:bulk-browser": "node tests/bulk-browser.mjs"
   },
   "devDependencies": {
     "@babel/parser": "7.28.5",
